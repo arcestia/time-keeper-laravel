@@ -17,12 +17,15 @@ class TimeAccount extends Model
         'last_applied_at',
         'drain_rate',
         'is_active',
+        'passcode_hash',
+        'passcode_set_at',
     ];
 
     protected $casts = [
         'last_applied_at' => 'datetime',
         'is_active' => 'boolean',
         'drain_rate' => 'decimal:3',
+        'passcode_set_at' => 'datetime',
     ];
 
     public function user(): BelongsTo

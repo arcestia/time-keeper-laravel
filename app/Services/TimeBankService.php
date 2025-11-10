@@ -4,71 +4,70 @@ namespace App\Services;
 
 use App\Models\TimeAccount;
 use App\Models\TimeLedger;
+use App\Models\UserTimeWallet;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
 class TimeBankService
 {
-    public function settle(TimeAccount $account, ?CarbonImmutable $now = null): TimeAccount
+    // Wallet decay now represents the per-second deduction source
+    public function settleWallet(UserTimeWallet $wallet, ?CarbonImmutable $now = null): UserTimeWallet
     {
         $now = $now ?: CarbonImmutable::now();
 
-        if (!$account->is_active) {
-            return $account;
+        if (!$wallet->is_active) {
+            return $wallet;
         }
 
-        $elapsed = max(0, $now->diffInSeconds($account->last_applied_at));
+        $last = $wallet->last_applied_at ?: $now;
+        $elapsed = max(0, $now->diffInSeconds($last));
         if ($elapsed <= 0) {
-            return $account;
-        }
-
-        $decay = (int) floor($elapsed * (float) $account->drain_rate);
-        if ($decay <= 0) {
-            $account->last_applied_at = $now;
-            $account->save();
-            return $account;
-        }
-
-        DB::transaction(function () use ($account, $decay, $now) {
-            $new = max(0, (int) $account->base_balance_seconds - $decay);
-
-            if ($new < (int) $account->base_balance_seconds) {
-                TimeLedger::create([
-                    'time_account_id' => $account->id,
-                    'type' => 'decay',
-                    'amount_seconds' => -($account->base_balance_seconds - $new),
-                    'reason' => 'auto-decay',
-                    'meta' => [
-                        'from' => (int) $account->base_balance_seconds,
-                        'to' => $new,
-                    ],
-                ]);
+            if (!$wallet->last_applied_at) {
+                $wallet->last_applied_at = $now;
+                $wallet->save();
             }
+            return $wallet;
+        }
 
-            $account->base_balance_seconds = $new;
-            $account->last_applied_at = $now;
-            $account->save();
+        $decay = (int) floor($elapsed * (float) $wallet->drain_rate);
+        if ($decay <= 0) {
+            $wallet->last_applied_at = $now;
+            $wallet->save();
+            return $wallet;
+        }
+
+        DB::transaction(function () use ($wallet, $decay, $now) {
+            $new = max(0, (int) $wallet->available_seconds - $decay);
+            $wallet->available_seconds = $new;
+            $wallet->last_applied_at = $now;
+            $wallet->save();
         });
 
-        return $account->refresh();
+        return $wallet->refresh();
     }
 
-    public function getDisplayBalance(TimeAccount $account, ?CarbonImmutable $now = null): int
+    public function getWalletDisplayBalance(UserTimeWallet $wallet, ?CarbonImmutable $now = null): int
     {
         $now = $now ?: CarbonImmutable::now();
-        if (!$account->is_active) {
-            return (int) $account->base_balance_seconds;
+        if (!$wallet->is_active) {
+            return (int) $wallet->available_seconds;
         }
-        $elapsed = max(0, $now->diffInSeconds($account->last_applied_at));
-        $decay = (int) floor($elapsed * (float) $account->drain_rate);
-        return max(0, (int) $account->base_balance_seconds - $decay);
+        $last = $wallet->last_applied_at ?: $now;
+        $elapsed = max(0, $now->diffInSeconds($last));
+        $decay = (int) floor($elapsed * (float) $wallet->drain_rate);
+        return max(0, (int) $wallet->available_seconds - $decay);
+    }
+
+    // Bank balance does not decay; expose for controller use
+    public function getDisplayBalance(TimeAccount $account, ?CarbonImmutable $now = null): int
+    {
+        return (int) $account->base_balance_seconds;
     }
 
     public function deposit(TimeAccount $account, int $seconds, string $reason = 'deposit'): TimeAccount
     {
         $seconds = max(0, $seconds);
         return DB::transaction(function () use ($account, $seconds, $reason) {
-            $this->settle($account);
             $account->base_balance_seconds = (int) $account->base_balance_seconds + $seconds;
             $account->save();
 
@@ -87,7 +86,6 @@ class TimeBankService
     {
         $seconds = max(0, $seconds);
         return DB::transaction(function () use ($account, $seconds, $reason) {
-            $this->settle($account);
             $new = max(0, (int) $account->base_balance_seconds - $seconds);
             $actualDebit = (int) $account->base_balance_seconds - $new;
             $account->base_balance_seconds = $new;
@@ -106,14 +104,14 @@ class TimeBankService
         });
     }
 
-    public function settleAllActive(): int
+    public function settleAllWallets(): int
     {
         $count = 0;
-        TimeAccount::query()
+        UserTimeWallet::query()
             ->where('is_active', true)
-            ->chunkById(200, function ($accounts) use (&$count) {
-                foreach ($accounts as $account) {
-                    $this->settle($account);
+            ->chunkById(200, function ($wallets) use (&$count) {
+                foreach ($wallets as $wallet) {
+                    $this->settleWallet($wallet);
                     $count++;
                 }
             });

@@ -9,6 +9,6 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 Artisan::command('time:settle', function (TimeBankService $bank) {
-    $count = $bank->settleAllActive();
+    $count = $bank->settleAllWallets();
     $this->info("Settled accounts: {$count}");
 })->purpose('Apply time decay to all active accounts once');

@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\BankController;
+use App\Http\Controllers\TimeKeeperController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -17,9 +18,20 @@ Route::middleware('auth')->group(function () {
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
-    Route::get('/bank', [BankController::class, 'index'])->name('bank.index');
+    Route::get('/bank', [BankController::class, 'page'])->name('bank.page');
+    Route::get('/bank/data', [BankController::class, 'index'])->name('bank.index');
+    Route::get('/bank/user-time', [BankController::class, 'userTime'])->name('bank.user_time');
+    Route::post('/bank/passcode', [BankController::class, 'setPasscode'])->name('bank.passcode');
+    Route::post('/bank/login', [BankController::class, 'login'])->name('bank.login');
+    Route::post('/bank/lock', [BankController::class, 'lock'])->name('bank.lock');
     Route::post('/bank/deposit', [BankController::class, 'deposit'])->name('bank.deposit');
     Route::post('/bank/withdraw', [BankController::class, 'withdraw'])->name('bank.withdraw');
+    Route::post('/bank/transfer', [BankController::class, 'transfer'])->name('bank.transfer');
+
+    // Time Keeper stats
+    Route::get('/keeper', [TimeKeeperController::class, 'page'])->name('keeper.page');
+    Route::get('/keeper/stats', [TimeKeeperController::class, 'stats'])->name('keeper.stats');
 });
 
 require __DIR__.'/auth.php';
+

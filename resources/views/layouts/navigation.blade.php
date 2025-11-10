@@ -15,6 +15,12 @@
                     <x-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">
                         {{ __('Dashboard') }}
                     </x-nav-link>
+                    <x-nav-link :href="route('bank.page')" :active="request()->routeIs('bank.page')">
+                        {{ __('Bank') }}
+                    </x-nav-link>
+                    <x-nav-link :href="route('keeper.page')" :active="request()->routeIs('keeper.page')">
+                        {{ __('Time Keeper') }}
+                    </x-nav-link>
                 </div>
             </div>
 
@@ -69,6 +75,12 @@
         <div class="pt-2 pb-3 space-y-1">
             <x-responsive-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">
                 {{ __('Dashboard') }}
+            </x-responsive-nav-link>
+            <x-responsive-nav-link :href="route('bank.page')" :active="request()->routeIs('bank.page')">
+                {{ __('Bank') }}
+            </x-responsive-nav-link>
+            <x-responsive-nav-link :href="route('keeper.page')" :active="request()->routeIs('keeper.page')">
+                {{ __('Time Keeper') }}
             </x-responsive-nav-link>
         </div>
 
