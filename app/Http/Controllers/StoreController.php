@@ -49,6 +49,7 @@ class StoreController extends Controller
             // Lock item for stock check
             $lockedItem = StoreItem::query()->where('id', $item->id)->lockForUpdate()->first();
             if ((int)($lockedItem->quantity ?? 0) < $qty) {
+                flasher()->addError('Item out of stock');
                 abort(422, 'Item out of stock');
             }
             $pricePer = (int)$lockedItem->price_seconds;
@@ -68,6 +69,7 @@ class StoreController extends Controller
                     ]);
                 }
                 if ((int)$wallet->available_seconds < $price) {
+                    flasher()->addError('Not enough time balance in wallet');
                     abort(422, 'Not enough time balance in wallet');
                 }
                 $wallet->available_seconds = (int)$wallet->available_seconds - $price;
@@ -78,6 +80,7 @@ class StoreController extends Controller
                     $bank = TimeAccount::create(['user_id' => $user->id, 'base_balance_seconds' => 0]);
                 }
                 if ((int)$bank->base_balance_seconds < $price) {
+                    flasher()->addError('Not enough time balance in bank');
                     abort(422, 'Not enough time balance in bank');
                 }
                 $bank->base_balance_seconds = (int)$bank->base_balance_seconds - $price;
@@ -101,6 +104,7 @@ class StoreController extends Controller
         });
 
         [$wallet, $bank, $stats, $lockedItem, $paidFrom, $price, $qty] = $result;
+        flasher()->addSuccess('Purchased ' . $qty . ' x ' . $item->name . ' via ' . $paidFrom);
         return response()->json([
             'ok' => true,
             'paid_from' => $paidFrom,

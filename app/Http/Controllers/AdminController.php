@@ -83,6 +83,7 @@ class AdminController extends Controller
             return $stats;
         });
 
+        flasher()->addSuccess('Updated stats for user ID ' . $target->id);
         return response()->json([
             'ok' => true,
             'stats' => [
@@ -122,6 +123,7 @@ class AdminController extends Controller
             'is_active' => (bool)($validated['is_active'] ?? true),
         ]);
 
+        flasher()->addSuccess('Job created: ' . $job->name);
         return response()->json([
             'ok' => true,
             'job' => $job,
@@ -168,6 +170,7 @@ class AdminController extends Controller
             'is_active' => (bool)($validated['is_active'] ?? true),
         ]);
 
+        flasher()->addSuccess('Store item created: ' . $item->name);
         return response()->json(['ok' => true, 'item' => $item]);
     }
 
@@ -183,6 +186,7 @@ class AdminController extends Controller
         $item->quantity = (int)$item->quantity + (int)$validated['quantity'];
         $item->save();
 
+        flasher()->addSuccess('Restocked ' . $validated['quantity'] . ' units of ' . $item->name);
         return response()->json(['ok' => true, 'quantity' => (int)$item->quantity]);
     }
 }
