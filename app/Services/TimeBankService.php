@@ -5,11 +5,18 @@ namespace App\Services;
 use App\Models\TimeAccount;
 use App\Models\TimeLedger;
 use App\Models\UserTimeWallet;
+use App\Models\TimeKeeperReserve;
+use App\Models\WalletLedger;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
 class TimeBankService
 {
+    private function reserve(): TimeKeeperReserve
+    {
+        return TimeKeeperReserve::query()->firstOrCreate([], ['balance_seconds' => 0]);
+    }
+
     // Wallet decay now represents the per-second deduction source
     public function settleWallet(UserTimeWallet $wallet, ?CarbonImmutable $now = null): UserTimeWallet
     {
@@ -19,8 +26,8 @@ class TimeBankService
             return $wallet;
         }
 
-        $last = $wallet->last_applied_at ?: $now;
-        $elapsed = max(0, $now->diffInSeconds($last));
+        $last = $wallet->last_applied_at ? CarbonImmutable::parse($wallet->last_applied_at) : $now;
+        $elapsed = max(0, $last->diffInSeconds($now));
         if ($elapsed <= 0) {
             if (!$wallet->last_applied_at) {
                 $wallet->last_applied_at = $now;
@@ -36,11 +43,35 @@ class TimeBankService
             return $wallet;
         }
 
-        DB::transaction(function () use ($wallet, $decay, $now) {
-            $new = max(0, (int) $wallet->available_seconds - $decay);
+        DB::transaction(function () use ($wallet, $decay, $now, $elapsed) {
+            $before = (int) $wallet->available_seconds;
+            $new = max(0, $before - $decay);
+            $actualDecay = $before - $new;
+
             $wallet->available_seconds = $new;
+            if ($new === 0) {
+                $wallet->is_active = false;
+            }
             $wallet->last_applied_at = $now;
             $wallet->save();
+
+            if ($actualDecay > 0) {
+                $reserve = $this->reserve();
+                $reserve->balance_seconds = (int) $reserve->balance_seconds + $actualDecay;
+                $reserve->save();
+
+                WalletLedger::create([
+                    'user_time_wallet_id' => $wallet->id,
+                    'type' => 'decay',
+                    'amount_seconds' => -$actualDecay,
+                    'from_seconds' => $before,
+                    'to_seconds' => $new,
+                    'meta' => [
+                        'elapsed_seconds' => $elapsed,
+                        'drain_rate' => (float) $wallet->drain_rate,
+                    ],
+                ]);
+            }
         });
 
         return $wallet->refresh();

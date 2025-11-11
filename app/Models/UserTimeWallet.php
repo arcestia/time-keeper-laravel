@@ -13,6 +13,15 @@ class UserTimeWallet extends Model
     protected $fillable = [
         'user_id',
         'available_seconds',
+        'last_applied_at',
+        'is_active',
+        'drain_rate',
+    ];
+
+    protected $casts = [
+        'last_applied_at' => 'datetime',
+        'is_active' => 'boolean',
+        'drain_rate' => 'decimal:3',
     ];
 
     public function user(): BelongsTo

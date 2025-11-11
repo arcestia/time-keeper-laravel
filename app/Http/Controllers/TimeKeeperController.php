@@ -9,6 +9,8 @@ use App\Services\TimeBankService;
 use App\Support\TimeUnits;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
+use App\Models\TimeKeeperReserve;
+use Illuminate\Support\Facades\Auth;
 
 class TimeKeeperController extends Controller
 {
@@ -42,6 +44,8 @@ class TimeKeeperController extends Controller
         $zeroWallets = UserTimeWallet::where('available_seconds', 0)->count();
         $avgBank = $bankAccounts > 0 ? (int) floor($totalBankSeconds / $bankAccounts) : 0;
         $avgWallet = $totalUsers > 0 ? (int) floor($totalWalletSeconds / max(1, UserTimeWallet::count())) : 0;
+        $reserve = TimeKeeperReserve::query()->first();
+        $reserveSeconds = (int) optional($reserve)->balance_seconds;
 
         return response()->json([
             'total_users' => $totalUsers,
@@ -56,6 +60,159 @@ class TimeKeeperController extends Controller
             'avg_wallet_formatted' => TimeUnits::compactColon($avgWallet),
             'avg_bank_seconds' => $avgBank,
             'avg_bank_formatted' => TimeUnits::compactColon($avgBank),
+            'reserve_seconds' => $reserveSeconds,
+            'reserve_formatted' => TimeUnits::compactColon($reserveSeconds),
+        ]);
+    }
+
+    public function adminDepositFromUserToReserve(): JsonResponse
+    {
+        $user = Auth::user();
+        abort_unless($user && $user->is_admin, 403);
+
+        $data = request()->validate([
+            'username' => ['required','string'],
+            'amount' => ['required','string'],
+        ]);
+
+        $toSeconds = TimeUnits::parseToSeconds($data['amount']);
+        if ($toSeconds <= 0) {
+            return response()->json(['message' => 'Amount must be > 0'], 422);
+        }
+
+        return DB::transaction(function () use ($data, $toSeconds) {
+            $targetUser = \App\Models\User::where('username', $data['username'])->firstOrFail();
+            // Lock both rows to avoid races
+            $account = TimeAccount::query()->where('user_id', $targetUser->id)->lockForUpdate()->first();
+            if (!$account) {
+                $account = TimeAccount::create(['user_id' => $targetUser->id, 'base_balance_seconds' => 0]);
+            }
+            $amount = min($toSeconds, (int) $account->base_balance_seconds);
+            if ($amount <= 0) {
+                return response()->json(['message' => 'User bank has insufficient balance'], 422);
+            }
+            $account->base_balance_seconds = (int) $account->base_balance_seconds - $amount;
+            $account->save();
+
+            $reserve = TimeKeeperReserve::query()->lockForUpdate()->first();
+            if (!$reserve) { $reserve = TimeKeeperReserve::create(['balance_seconds' => 0]); }
+            $reserve->balance_seconds = (int) $reserve->balance_seconds + $amount;
+            $reserve->save();
+
+            return response()->json(['status' => 'ok', 'moved_seconds' => $amount, 'reserve' => (int) $reserve->balance_seconds, 'user_bank' => (int) $account->base_balance_seconds]);
+        });
+    }
+
+    public function adminWithdrawFromReserveToUser(): JsonResponse
+    {
+        $user = Auth::user();
+        abort_unless($user && $user->is_admin, 403);
+
+        $data = request()->validate([
+            'username' => ['required','string'],
+            'amount' => ['required','string'],
+        ]);
+
+        $toSeconds = TimeUnits::parseToSeconds($data['amount']);
+        if ($toSeconds <= 0) {
+            return response()->json(['message' => 'Amount must be > 0'], 422);
+        }
+
+        return DB::transaction(function () use ($data, $toSeconds) {
+            $targetUser = \App\Models\User::where('username', $data['username'])->firstOrFail();
+            $account = TimeAccount::query()->where('user_id', $targetUser->id)->lockForUpdate()->first();
+            if (!$account) {
+                $account = TimeAccount::create(['user_id' => $targetUser->id, 'base_balance_seconds' => 0]);
+            }
+
+            $reserve = TimeKeeperReserve::query()->lockForUpdate()->first();
+            if (!$reserve) { $reserve = TimeKeeperReserve::create(['balance_seconds' => 0]); }
+            $amount = min($toSeconds, max(0, (int) $reserve->balance_seconds));
+            if ($amount <= 0) {
+                return response()->json(['message' => 'Reserve has insufficient balance'], 422);
+            }
+            $reserve->balance_seconds = (int) $reserve->balance_seconds - $amount;
+            $reserve->save();
+
+            $account->base_balance_seconds = (int) $account->base_balance_seconds + $amount;
+            $account->save();
+
+            return response()->json(['status' => 'ok', 'moved_seconds' => $amount, 'reserve' => (int) $reserve->balance_seconds, 'user_bank' => (int) $account->base_balance_seconds]);
+        });
+    }
+
+    public function adminDistributeReserveToAll(): JsonResponse
+    {
+        $user = Auth::user();
+        abort_unless($user && $user->is_admin, 403);
+
+        $data = request()->validate([
+            'amount' => ['required','string'], // per-user amount
+        ]);
+
+        $perUser = TimeUnits::parseToSeconds($data['amount']);
+        if ($perUser <= 0) {
+            return response()->json(['message' => 'Amount must be > 0'], 422);
+        }
+
+        $totalUsers = User::count();
+        if ($totalUsers <= 0) {
+            return response()->json(['message' => 'No users to distribute to'], 422);
+        }
+
+        $result = DB::transaction(function () use ($perUser, $totalUsers) {
+            // Lock reserve row, recalc caps with current value
+            $reserve = TimeKeeperReserve::query()->lockForUpdate()->first();
+            if (!$reserve) { $reserve = TimeKeeperReserve::create(['balance_seconds' => 0]); }
+            $reserveSeconds = (int) $reserve->balance_seconds;
+            $required = $perUser * $totalUsers;
+            if ($required > $reserveSeconds) {
+                $perUser = intdiv($reserveSeconds, $totalUsers);
+            }
+            if ($perUser <= 0) {
+                return ['ok' => false, 'message' => 'Reserve too low for distribution'];
+            }
+            $moveTotal = $perUser * $totalUsers;
+
+            // Deduct reserve upfront
+            $reserve->balance_seconds = (int) $reserve->balance_seconds - $moveTotal;
+            $reserve->save();
+
+            // Credit each user's WALLET (users time), not bank
+            $now = \Carbon\CarbonImmutable::now();
+            User::query()->select('id')->chunkById(1000, function ($users) use ($perUser, $now) {
+                foreach ($users as $u) {
+                    $wallet = UserTimeWallet::query()->where('user_id', $u->id)->lockForUpdate()->first();
+                    if (!$wallet) {
+                        $wallet = UserTimeWallet::create([
+                            'user_id' => $u->id,
+                            'available_seconds' => 0,
+                            'last_applied_at' => $now,
+                            'drain_rate' => 1.000,
+                            'is_active' => true,
+                        ]);
+                    }
+                    $wallet->available_seconds = (int) $wallet->available_seconds + $perUser;
+                    if (!$wallet->is_active) {
+                        $wallet->is_active = true;
+                        $wallet->last_applied_at = $now;
+                    }
+                    $wallet->save();
+                }
+            });
+
+            return ['ok' => true, 'per_user' => $perUser, 'move_total' => $moveTotal, 'remaining' => (int) $reserve->balance_seconds];
+        });
+
+        if (!$result['ok']) {
+            return response()->json(['message' => $result['message']], 422);
+        }
+
+        return response()->json([
+            'status' => 'ok',
+            'per_user' => $result['per_user'],
+            'distributed_total' => $result['move_total'],
+            'remaining_reserve' => $result['remaining'],
         ]);
     }
 }

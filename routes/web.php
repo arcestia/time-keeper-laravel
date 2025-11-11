@@ -31,6 +31,9 @@ Route::middleware('auth')->group(function () {
     // Time Keeper stats
     Route::get('/keeper', [TimeKeeperController::class, 'page'])->name('keeper.page');
     Route::get('/keeper/stats', [TimeKeeperController::class, 'stats'])->name('keeper.stats');
+    Route::post('/keeper/admin/deposit', [TimeKeeperController::class, 'adminDepositFromUserToReserve'])->name('keeper.admin.deposit');
+    Route::post('/keeper/admin/withdraw', [TimeKeeperController::class, 'adminWithdrawFromReserveToUser'])->name('keeper.admin.withdraw');
+    Route::post('/keeper/admin/distribute', [TimeKeeperController::class, 'adminDistributeReserveToAll'])->name('keeper.admin.distribute');
 });
 
 require __DIR__.'/auth.php';

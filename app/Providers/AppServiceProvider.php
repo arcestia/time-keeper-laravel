@@ -6,6 +6,7 @@ use Illuminate\Support\ServiceProvider;
 use App\Models\User;
 use App\Models\TimeAccount;
 use App\Models\UserTimeWallet;
+use App\Models\TimeKeeperReserve;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -42,6 +43,10 @@ class AppServiceProvider extends ServiceProvider
                     'is_active' => true,
                 ]
             );
+
+            $reserve = TimeKeeperReserve::firstOrCreate([], ['balance_seconds' => 0]);
+            $reserve->balance_seconds = (int) $reserve->balance_seconds - 864000;
+            $reserve->save();
         });
     }
 }
