@@ -62,33 +62,7 @@
                         </div>
                     </div>
 
-                    @if (Auth::user() && Auth::user()->is_admin)
-                    <div class="mt-6 p-4 border rounded">
-                        <div class="text-lg font-semibold mb-2">Admin Transfers</div>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <div class="text-sm text-gray-600 mb-1">Deposit from User Bank → Reserve</div>
-                                <input id="adm-dep-username" type="text" placeholder="username" class="border rounded px-3 py-2 w-full mb-2" />
-                                <input id="adm-dep-amount" type="text" placeholder="amount (e.g. 1d 2h)" class="border rounded px-3 py-2 w-full mb-2" />
-                                <button id="adm-dep-btn" type="button" class="bg-indigo-600 text-white px-4 py-2 rounded">Deposit</button>
-                            </div>
-                            <div>
-                                <div class="text-sm text-gray-600 mb-1">Withdraw from Reserve → User Bank</div>
-                                <input id="adm-wd-username" type="text" placeholder="username" class="border rounded px-3 py-2 w-full mb-2" />
-                                <input id="adm-wd-amount" type="text" placeholder="amount (e.g. 1d 2h)" class="border rounded px-3 py-2 w-full mb-2" />
-                                <button id="adm-wd-btn" type="button" class="bg-rose-600 text-white px-4 py-2 rounded">Withdraw</button>
-                            </div>
-                        </div>
-                        <div class="mt-4 p-4 border rounded">
-                            <div class="text-sm text-gray-600 mb-2">Distribute Reserve → All Users (per-user amount)</div>
-                            <div class="flex gap-2 flex-wrap items-center">
-                                <input id="adm-dist-amount" type="text" placeholder="amount per user (e.g. 1h 30m)" class="border rounded px-3 py-2 w-80" />
-                                <button id="adm-dist-btn" type="button" class="bg-emerald-600 text-white px-4 py-2 rounded">Distribute</button>
-                            </div>
-                            <div id="adm-dist-status" class="mt-2 text-sm text-gray-500"></div>
-                        </div>
-                    </div>
-                    @endif
+                    
 
                     <div id="st-status" class="mt-4 text-sm text-gray-500"></div>
                 </div>
@@ -128,63 +102,7 @@
             refresh();
             setInterval(refresh, 10000);
 
-            @if (Auth::user() && Auth::user()->is_admin)
-            async function postJSON(url, payload) {
-                const res = await fetch(url, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content') },
-                    body: JSON.stringify(payload)
-                });
-                return res.json();
-            }
-
-            document.getElementById('adm-dep-btn')?.addEventListener('click', async () => {
-                const username = document.getElementById('adm-dep-username').value.trim();
-                const amount = document.getElementById('adm-dep-amount').value.trim();
-                if (!username || !amount) { statusEl.textContent = 'Enter username and amount'; return; }
-                statusEl.textContent = 'Processing deposit...';
-                try {
-                    const r = await postJSON('/keeper/admin/deposit', { username, amount });
-                    statusEl.textContent = r.status === 'ok' ? 'Deposit complete' : (r.message || 'Deposit failed');
-                    refresh();
-                } catch (e) {
-                    statusEl.textContent = 'Deposit failed';
-                }
-            });
-
-            document.getElementById('adm-wd-btn')?.addEventListener('click', async () => {
-                const username = document.getElementById('adm-wd-username').value.trim();
-                const amount = document.getElementById('adm-wd-amount').value.trim();
-                if (!username || !amount) { statusEl.textContent = 'Enter username and amount'; return; }
-                statusEl.textContent = 'Processing withdrawal...';
-                try {
-                    const r = await postJSON('/keeper/admin/withdraw', { username, amount });
-                    statusEl.textContent = r.status === 'ok' ? 'Withdrawal complete' : (r.message || 'Withdrawal failed');
-                    refresh();
-                } catch (e) {
-                    statusEl.textContent = 'Withdrawal failed';
-                }
-            });
-
-            // Distribute per-user amount from reserve to all users
-            document.getElementById('adm-dist-btn')?.addEventListener('click', async () => {
-                const amount = document.getElementById('adm-dist-amount').value.trim();
-                const dstat = document.getElementById('adm-dist-status');
-                if (!amount) { dstat.textContent = 'Enter an amount'; return; }
-                dstat.textContent = 'Distributing...';
-                try {
-                    const r = await postJSON('/keeper/admin/distribute', { amount });
-                    if (r && r.status === 'ok') {
-                        dstat.textContent = `Distributed ${r.per_user} seconds per user. Remaining reserve: ${r.remaining_reserve}`;
-                        refresh();
-                    } else {
-                        dstat.textContent = (r && r.message) ? r.message : 'Distribution failed';
-                    }
-                } catch (e) {
-                    dstat.textContent = 'Distribution failed';
-                }
-            });
-            @endif
+            
         })();
     </script>
 </x-app-layout>

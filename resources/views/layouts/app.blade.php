@@ -33,4 +33,6 @@
             </main>
         </div>
     </body>
+    <script src="https://cdn.jsdelivr.net/npm/@flasher/flasher@1.2.1/dist/flasher.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@flasher/flasher-sweetalert@1.2.1/dist/flasher-sweetalert.min.js"></script>
 </html>

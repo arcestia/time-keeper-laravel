@@ -19,12 +19,55 @@
                             <div id="dt-alert" class="mt-2 text-sm text-rose-600 hidden">Warning: Your time is below 1 hour.</div>
                             <div id="dt-status" class="mt-2 text-sm text-gray-500"></div>
                         </div>
+                        <div class="p-4 border rounded-lg">
+                            <div class="text-lg font-semibold mb-2">Your Stats</div>
+                            <div class="space-y-3">
+                                <div>
+                                    <div class="flex justify-between text-sm"><span>Energy</span><span id="stat-energy-val">--%</span></div>
+                                    <div class="w-full bg-gray-200 rounded h-2 overflow-hidden"><div id="stat-energy" class="h-2 bg-amber-500" style="width:0%"></div></div>
+                                </div>
+                                <div>
+                                    <div class="flex justify-between text-sm"><span>Food</span><span id="stat-food-val">--%</span></div>
+                                    <div class="w-full bg-gray-200 rounded h-2 overflow-hidden"><div id="stat-food" class="h-2 bg-emerald-500" style="width:0%"></div></div>
+                                </div>
+                                <div>
+                                    <div class="flex justify-between text-sm"><span>Water</span><span id="stat-water-val">--%</span></div>
+                                    <div class="w-full bg-gray-200 rounded h-2 overflow-hidden"><div id="stat-water" class="h-2 bg-cyan-500" style="width:0%"></div></div>
+                                </div>
+                                <div>
+                                    <div class="flex justify-between text-sm"><span>Leisure</span><span id="stat-leisure-val">--%</span></div>
+                                    <div class="w-full bg-gray-200 rounded h-2 overflow-hidden"><div id="stat-leisure" class="h-2 bg-indigo-500" style="width:0%"></div></div>
+                                </div>
+                                <div>
+                                    <div class="flex justify-between text-sm"><span>Health</span><span id="stat-health-val">--%</span></div>
+                                    <div class="w-full bg-gray-200 rounded h-2 overflow-hidden"><div id="stat-health" class="h-2 bg-rose-500" style="width:0%"></div></div>
+                                </div>
+                                <div id="stats-status" class="text-sm text-gray-500"></div>
+                            </div>
+                        </div>
+                        
                     </div>
                     <script>
                         (() => {
+                            const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
                             const balEl = document.getElementById('dt-balance');
                             const statusEl = document.getElementById('dt-status');
                             const alertEl = document.getElementById('dt-alert');
+                            const statsStatusEl = document.getElementById('stats-status');
+                            const bars = {
+                                energy: document.getElementById('stat-energy'),
+                                food: document.getElementById('stat-food'),
+                                water: document.getElementById('stat-water'),
+                                leisure: document.getElementById('stat-leisure'),
+                                health: document.getElementById('stat-health'),
+                            };
+                            const vals = {
+                                energy: document.getElementById('stat-energy-val'),
+                                food: document.getElementById('stat-food-val'),
+                                water: document.getElementById('stat-water-val'),
+                                leisure: document.getElementById('stat-leisure-val'),
+                                health: document.getElementById('stat-health-val'),
+                            };
                             let current = 0;
                             let last = Date.now();
 
@@ -66,6 +109,20 @@
                                 } catch (e) {
                                     statusEl.textContent = 'Unable to load time';
                                 }
+                                try {
+                                    const r2 = await fetch('/api/me/stats', { headers: { 'Accept': 'application/json' } });
+                                    if (!r2.ok) throw new Error('failed');
+                                    const s = await r2.json();
+                                    for (const k of ['energy','food','water','leisure','health']) {
+                                        const v = Math.max(0, Math.min(100, parseInt(s[k] ?? 0, 10)));
+                                        if (bars[k]) bars[k].style.width = v + '%';
+                                        if (vals[k]) vals[k].textContent = v + '%';
+                                    }
+                                    statsStatusEl.textContent = '';
+                                } catch (e) {
+                                    statsStatusEl.textContent = 'Unable to load stats';
+                                }
+                                
                             }
 
                             setInterval(() => {

@@ -3,6 +3,9 @@
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\BankController;
 use App\Http\Controllers\TimeKeeperController;
+use App\Http\Controllers\StatsController;
+use App\Http\Controllers\JobsController;
+use App\Http\Controllers\StoreController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -27,6 +30,32 @@ Route::middleware('auth')->group(function () {
     Route::post('/bank/deposit', [BankController::class, 'deposit'])->name('bank.deposit');
     Route::post('/bank/withdraw', [BankController::class, 'withdraw'])->name('bank.withdraw');
     Route::post('/bank/transfer', [BankController::class, 'transfer'])->name('bank.transfer');
+
+    // Player stats
+    Route::get('/api/me/stats', [StatsController::class, 'me'])->name('stats.me');
+    Route::patch('/api/me/stats', [StatsController::class, 'updateMe'])->name('stats.updateMe');
+
+    // Admin
+    Route::get('/admin', [\App\Http\Controllers\AdminController::class, 'page'])->name('admin.page');
+    Route::get('/admin/users', [\App\Http\Controllers\AdminController::class, 'usersSearch'])->name('admin.users.search');
+    Route::get('/admin/users/{id}/stats', [\App\Http\Controllers\AdminController::class, 'getUserStats'])->name('admin.users.stats');
+    Route::patch('/admin/users/{id}/stats', [\App\Http\Controllers\AdminController::class, 'updateUserStats'])->name('admin.users.stats.update');
+    Route::post('/admin/jobs', [\App\Http\Controllers\AdminController::class, 'createJob'])->name('admin.jobs.create');
+    Route::get('/admin/store/items', [\App\Http\Controllers\AdminController::class, 'storeItems'])->name('admin.store.items');
+    Route::post('/admin/store/items', [\App\Http\Controllers\AdminController::class, 'createStoreItem'])->name('admin.store.items.create');
+    Route::post('/admin/store/items/{id}/restock', [\App\Http\Controllers\AdminController::class, 'restockStoreItem'])->name('admin.store.items.restock');
+
+    // Jobs system
+    Route::get('/jobs', [JobsController::class, 'page'])->name('jobs.page');
+    Route::get('/api/jobs', [JobsController::class, 'list'])->name('jobs.list');
+    Route::post('/api/jobs/{key}/start', [JobsController::class, 'start'])->name('jobs.start');
+    Route::post('/api/jobs/{key}/claim', [JobsController::class, 'claim'])->name('jobs.claim');
+
+    // Store
+    Route::get('/store', [StoreController::class, 'page'])->name('store.page');
+    Route::get('/api/store/items', [StoreController::class, 'items'])->name('store.items');
+    Route::get('/api/store/balances', [StoreController::class, 'balances'])->name('store.balances');
+    Route::post('/api/store/buy/{key}', [StoreController::class, 'buy'])->name('store.buy');
 
     // Time Keeper stats
     Route::get('/keeper', [TimeKeeperController::class, 'page'])->name('keeper.page');

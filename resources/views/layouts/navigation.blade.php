@@ -21,6 +21,17 @@
                     <x-nav-link :href="route('keeper.page')" :active="request()->routeIs('keeper.page')">
                         {{ __('Time Keeper') }}
                     </x-nav-link>
+                    <x-nav-link :href="route('store.page')" :active="request()->routeIs('store.page')">
+                        {{ __('Store') }}
+                    </x-nav-link>
+                    <x-nav-link :href="route('jobs.page')" :active="request()->routeIs('jobs.page')">
+                        {{ __('Jobs') }}
+                    </x-nav-link>
+                    @if(Auth::user() && Auth::user()->is_admin)
+                    <x-nav-link :href="route('admin.page')" :active="request()->routeIs('admin.page')">
+                        {{ __('Admin') }}
+                    </x-nav-link>
+                    @endif
                 </div>
             </div>
 
@@ -82,6 +93,17 @@
             <x-responsive-nav-link :href="route('keeper.page')" :active="request()->routeIs('keeper.page')">
                 {{ __('Time Keeper') }}
             </x-responsive-nav-link>
+            <x-responsive-nav-link :href="route('store.page')" :active="request()->routeIs('store.page')">
+                {{ __('Store') }}
+            </x-responsive-nav-link>
+            <x-responsive-nav-link :href="route('jobs.page')" :active="request()->routeIs('jobs.page')">
+                {{ __('Jobs') }}
+            </x-responsive-nav-link>
+            @if(Auth::user() && Auth::user()->is_admin)
+            <x-responsive-nav-link :href="route('admin.page')" :active="request()->routeIs('admin.page')">
+                {{ __('Admin') }}
+            </x-responsive-nav-link>
+            @endif
         </div>
 
         <!-- Responsive Settings Options -->

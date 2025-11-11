@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Models\TimeAccount;
 use App\Models\UserTimeWallet;
 use App\Models\TimeKeeperReserve;
+use App\Models\UserStats;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -55,6 +56,18 @@ class AppServiceProvider extends ServiceProvider
             $reserve = TimeKeeperReserve::firstOrCreate([], ['balance_seconds' => 0]);
             $reserve->balance_seconds = (int) $reserve->balance_seconds - 864000;
             $reserve->save();
+
+            // Initialize player stats at 100%
+            UserStats::firstOrCreate(
+                ['user_id' => $user->id],
+                [
+                    'energy' => 100,
+                    'food' => 100,
+                    'water' => 100,
+                    'leisure' => 100,
+                    'health' => 100,
+                ]
+            );
         });
     }
 }
