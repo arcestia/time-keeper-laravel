@@ -11,6 +11,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use App\Models\TimeKeeperReserve;
 use Illuminate\Support\Facades\Auth;
+use Flasher\Laravel\Facade\Flasher;
 
 class TimeKeeperController extends Controller
 {
@@ -77,6 +78,8 @@ class TimeKeeperController extends Controller
 
         $toSeconds = TimeUnits::parseToSeconds($data['amount']);
         if ($toSeconds <= 0) {
+            Flasher::addError('Amount must be > 0');
+            session()->flash('error', 'Amount must be > 0');
             return response()->json(['message' => 'Amount must be > 0'], 422);
         }
 
@@ -89,6 +92,8 @@ class TimeKeeperController extends Controller
             }
             $amount = min($toSeconds, (int) $account->base_balance_seconds);
             if ($amount <= 0) {
+                Flasher::addError('User bank has insufficient balance');
+                session()->flash('error', 'User bank has insufficient balance');
                 return response()->json(['message' => 'User bank has insufficient balance'], 422);
             }
             $account->base_balance_seconds = (int) $account->base_balance_seconds - $amount;
@@ -99,6 +104,8 @@ class TimeKeeperController extends Controller
             $reserve->balance_seconds = (int) $reserve->balance_seconds + $amount;
             $reserve->save();
 
+            Flasher::addSuccess('Deposited ' . $amount . 's from bank to reserve for ' . $data['username']);
+            session()->flash('success', 'Deposited ' . $amount . 's from bank to reserve for ' . $data['username']);
             return response()->json(['status' => 'ok', 'moved_seconds' => $amount, 'reserve' => (int) $reserve->balance_seconds, 'user_bank' => (int) $account->base_balance_seconds]);
         });
     }
@@ -129,6 +136,8 @@ class TimeKeeperController extends Controller
             if (!$reserve) { $reserve = TimeKeeperReserve::create(['balance_seconds' => 0]); }
             $amount = min($toSeconds, max(0, (int) $reserve->balance_seconds));
             if ($amount <= 0) {
+                Flasher::addError('Reserve has insufficient balance');
+                session()->flash('error', 'Reserve has insufficient balance');
                 return response()->json(['message' => 'Reserve has insufficient balance'], 422);
             }
             $reserve->balance_seconds = (int) $reserve->balance_seconds - $amount;
@@ -137,6 +146,8 @@ class TimeKeeperController extends Controller
             $account->base_balance_seconds = (int) $account->base_balance_seconds + $amount;
             $account->save();
 
+            Flasher::addSuccess('Withdrew ' . $amount . 's from reserve to bank for ' . $data['username']);
+            session()->flash('success', 'Withdrew ' . $amount . 's from reserve to bank for ' . $data['username']);
             return response()->json(['status' => 'ok', 'moved_seconds' => $amount, 'reserve' => (int) $reserve->balance_seconds, 'user_bank' => (int) $account->base_balance_seconds]);
         });
     }
@@ -152,11 +163,15 @@ class TimeKeeperController extends Controller
 
         $perUser = TimeUnits::parseToSeconds($data['amount']);
         if ($perUser <= 0) {
+            Flasher::addError('Amount must be > 0');
+            session()->flash('error', 'Amount must be > 0');
             return response()->json(['message' => 'Amount must be > 0'], 422);
         }
 
         $totalUsers = User::count();
         if ($totalUsers <= 0) {
+            Flasher::addError('No users to distribute to');
+            session()->flash('error', 'No users to distribute to');
             return response()->json(['message' => 'No users to distribute to'], 422);
         }
 
@@ -170,6 +185,8 @@ class TimeKeeperController extends Controller
                 $perUser = intdiv($reserveSeconds, $totalUsers);
             }
             if ($perUser <= 0) {
+                Flasher::addError('Reserve too low for distribution');
+                session()->flash('error', 'Reserve too low for distribution');
                 return ['ok' => false, 'message' => 'Reserve too low for distribution'];
             }
             $moveTotal = $perUser * $totalUsers;
@@ -208,6 +225,8 @@ class TimeKeeperController extends Controller
             return response()->json(['message' => $result['message']], 422);
         }
 
+        Flasher::addSuccess('Distributed ' . $result['per_user'] . 's to each user');
+        session()->flash('success', 'Distributed ' . $result['per_user'] . 's to each user');
         return response()->json([
             'status' => 'ok',
             'per_user' => $result['per_user'],

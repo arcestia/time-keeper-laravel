@@ -11,6 +11,9 @@ use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Flasher\Laravel\Facade\Flasher;
+use App\Services\PremiumService;
+use App\Models\Premium;
 
 class JobsController extends Controller
 {
@@ -82,6 +85,7 @@ class JobsController extends Controller
                 ->lockForUpdate()
                 ->first();
             if ($anyUnclaimed) {
+                Flasher::addError('You already have a job in progress or awaiting claim');
                 abort(422, 'You already have a job in progress or awaiting claim');
             }
 
@@ -90,7 +94,17 @@ class JobsController extends Controller
             if ($lastRun) {
                 $coolUntil = CarbonImmutable::parse($lastRun->started_at)->addSeconds($job->cooldown_seconds);
                 if ($coolUntil->isFuture()) {
+                    Flasher::addError('Job is on cooldown');
                     abort(422, 'Job is on cooldown');
+                }
+            }
+
+            // Premium-only enforcement
+            if ((bool)($job->premium_only ?? false)) {
+                $prem = PremiumService::getOrCreate($user->id);
+                if (!PremiumService::isActive($prem)) {
+                    Flasher::addError('This job requires active Premium');
+                    abort(403, 'Premium required');
                 }
             }
 
@@ -102,6 +116,7 @@ class JobsController extends Controller
             $cost = (int)($job->energy_cost ?? 0);
             if ($cost > 0) {
                 if ((int)$stats->energy < $cost) {
+                    Flasher::addError('Not enough energy');
                     abort(422, 'Not enough energy');
                 }
                 $stats->energy = max(0, (int)$stats->energy - $cost);
@@ -116,6 +131,7 @@ class JobsController extends Controller
             ]);
         });
 
+        Flasher::addSuccess('Job started: ' . $job->name);
         return response()->json([
             'ok' => true,
             'run_id' => $run->id,
@@ -137,16 +153,29 @@ class JobsController extends Controller
                 ->lockForUpdate()
                 ->first();
             if (!$run || $run->claimed_at) {
+                Flasher::addError('No claimable run');
                 abort(422, 'No claimable run');
             }
             if ($now->lt(CarbonImmutable::parse($run->completed_at))) {
+                Flasher::addError('Job not completed yet');
                 abort(422, 'Job not completed yet');
             }
 
             $reserve = TimeKeeperReserve::query()->lockForUpdate()->first();
             if (!$reserve) { $reserve = TimeKeeperReserve::create(['balance_seconds' => 0]); }
             $amount = (int)$job->reward_seconds;
+            // Premium reward boost
+            $prem = PremiumService::getOrCreate($user->id);
+            if (PremiumService::isActive($prem)) {
+                $tier = PremiumService::tierFor((int)$prem->premium_seconds_accumulated);
+                $benefits = PremiumService::benefitsForTier($tier);
+                $mult = (float)($benefits['reward_multiplier'] ?? 1.0);
+                if ($mult > 1.0) {
+                    $amount = (int) floor($amount * $mult);
+                }
+            }
             if ((int)$reserve->balance_seconds < $amount) {
+                Flasher::addError('Reserve insufficient to pay reward');
                 abort(422, 'Reserve insufficient to pay reward');
             }
 
@@ -175,6 +204,7 @@ class JobsController extends Controller
         });
 
         [$run, $wallet, $reserve] = $result;
+        Flasher::addSuccess('Reward claimed: ' . $job->name);
         return response()->json([
             'ok' => true,
             'wallet_seconds' => (int)$wallet->available_seconds,

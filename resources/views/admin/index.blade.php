@@ -9,175 +9,12 @@
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
             <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                 <div class="p-6 text-gray-900">
-                    <div class="border-b mb-4">
-                        <div class="flex gap-2">
-                            <button id="tabbtn-stats" class="px-3 py-2 text-sm font-medium border-b-2 border-indigo-600 text-indigo-700">Stats</button>
-                            <button id="tabbtn-transfers" class="px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-800">Transfers</button>
-                            <button id="tabbtn-jobs" class="px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-800">Jobs</button>
-                            <button id="tabbtn-store" class="px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-800">Store</button>
-                        </div>
-
-                    <div id="tab-store" class="mt-10 hidden">
-                        <h3 class="text-lg font-semibold">Store Management</h3>
-                        <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div class="p-4 border rounded">
-                                <div class="text-sm text-gray-600 mb-2">Items</div>
-                                <div id="ast-status" class="text-sm text-gray-500 mb-2"></div>
-                                <table class="w-full text-sm">
-                                    <thead>
-                                        <tr class="text-left border-b">
-                                            <th class="py-1">Name</th><th class="py-1">Type</th><th class="py-1">Price</th><th class="py-1">Qty</th><th class="py-1">Effects</th><th class="py-1">Restock</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="ast-items"></tbody>
-                                </table>
-                            </div>
-                            <div class="p-4 border rounded">
-                                <div class="text-sm text-gray-600 mb-2">Create Item</div>
-                                <div class="grid grid-cols-2 gap-2">
-                                    <div class="col-span-2"><input id="ci-key" class="w-full border rounded px-2 py-1" placeholder="key (alpha_dash)"></div>
-                                    <div class="col-span-2"><input id="ci-name" class="w-full border rounded px-2 py-1" placeholder="name"></div>
-                                    <div><select id="ci-type" class="w-full border rounded px-2 py-1"><option value="food">food</option><option value="water">water</option></select></div>
-                                    <div><input id="ci-price" type="number" min="1" class="w-full border rounded px-2 py-1" placeholder="price (sec)"></div>
-                                    <div><input id="ci-qty" type="number" min="0" class="w-full border rounded px-2 py-1" placeholder="quantity"></div>
-                                    <div><input id="ci-rf" type="number" min="0" max="100" class="w-full border rounded px-2 py-1" placeholder="restore food %"></div>
-                                    <div><input id="ci-rw" type="number" min="0" max="100" class="w-full border rounded px-2 py-1" placeholder="restore water %"></div>
-                                    <div><input id="ci-re" type="number" min="0" max="100" class="w-full border rounded px-2 py-1" placeholder="restore energy %"></div>
-                                    <div class="flex items-center gap-2"><input id="ci-active" type="checkbox" checked><label class="text-sm">Active</label></div>
-                                    <div class="col-span-2"><textarea id="ci-desc" class="w-full border rounded px-2 py-1" rows="2" placeholder="description"></textarea></div>
-                                    <div class="col-span-2 text-right"><button id="ci-create" class="px-3 py-1 bg-indigo-600 text-white rounded">Create</button></div>
-                                    <div id="ci-status" class="col-span-2 text-sm text-gray-500"></div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    </div>
-
-                    <div id="tab-stats">
-                    <div class="flex items-end gap-3">
-                        <div class="flex-1">
-                            <label class="block text-sm font-medium text-gray-700">Search users (username/email)</label>
-                            <input id="adm-q" type="text" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500" placeholder="e.g. alice or alice@example.com">
-                        </div>
-
+                    <x-admin-tabbar />
                     
-                        <button id="adm-search" class="inline-flex items-center px-4 py-2 bg-indigo-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-indigo-500 focus:bg-indigo-700 active:bg-indigo-700 disabled:opacity-25 transition">Search</button>
-                    </div>
-
-                    <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div>
-                            <div class="text-sm text-gray-600 mb-2">Results</div>
-                            <ul id="adm-results" class="divide-y border rounded"></ul>
-                        </div>
-                        <div>
-                            <div class="text-sm text-gray-600 mb-2">User Stats</div>
-                            <div id="adm-user" class="text-sm text-gray-500">Select a user to view/edit stats.</div>
-                            <form id="adm-form" class="hidden space-y-3 mt-2">
-                                <div class="text-sm" id="adm-user-head"></div>
-                                <div>
-                                    <label class="block text-sm">Energy <span id="v-energy" class="ml-1 text-gray-500">--</span>%</label>
-                                    <input type="range" id="energy" min="0" max="100" value="100" class="w-full">
-                                </div>
-                                <div>
-                                    <label class="block text-sm">Food <span id="v-food" class="ml-1 text-gray-500">--</span>%</label>
-                                    <input type="range" id="food" min="0" max="100" value="100" class="w-full">
-                                </div>
-                                <div>
-                                    <label class="block text-sm">Water <span id="v-water" class="ml-1 text-gray-500">--</span>%</label>
-                                    <input type="range" id="water" min="0" max="100" value="100" class="w-full">
-                                </div>
-                                <div>
-                                    <label class="block text-sm">Leisure <span id="v-leisure" class="ml-1 text-gray-500">--</span>%</label>
-                                    <input type="range" id="leisure" min="0" max="100" value="100" class="w-full">
-                                </div>
-                                <div>
-                                    <label class="block text-sm">Health <span id="v-health" class="ml-1 text-gray-500">--</span>%</label>
-                                    <input type="range" id="health" min="0" max="100" value="100" class="w-full">
-                                </div>
-                                <div class="flex gap-2">
-                                    <button id="adm-save" type="button" class="inline-flex items-center px-4 py-2 bg-green-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-green-500">Save</button>
-                                    <div id="adm-status" class="text-sm text-gray-500"></div>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-                    </div> <!-- /tab-stats -->
-
-                    <div id="tab-transfers" class="mt-10 hidden">
-                        <h3 class="text-lg font-semibold">Time Reserve Transfers</h3>
-                        <div class="mt-2 grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div class="p-4 border rounded">
-                                <div class="text-sm text-gray-600 mb-1">Deposit from User Bank → Reserve</div>
-                                <input id="tr-dep-username" type="text" placeholder="username" class="border rounded px-3 py-2 w-full mb-2" />
-                                <input id="tr-dep-amount" type="text" placeholder="amount (e.g. 1d 2h)" class="border rounded px-3 py-2 w-full mb-2" />
-                                <button id="tr-dep-btn" type="button" class="bg-indigo-600 text-white px-4 py-2 rounded">Deposit</button>
-                            </div>
-                            <div class="p-4 border rounded">
-                                <div class="text-sm text-gray-600 mb-1">Withdraw from Reserve → User Bank</div>
-                                <input id="tr-wd-username" type="text" placeholder="username" class="border rounded px-3 py-2 w-full mb-2" />
-                                <input id="tr-wd-amount" type="text" placeholder="amount (e.g. 1d 2h)" class="border rounded px-3 py-2 w-full mb-2" />
-                                <button id="tr-wd-btn" type="button" class="bg-rose-600 text-white px-4 py-2 rounded">Withdraw</button>
-                            </div>
-                        </div>
-                        <div class="mt-4 p-4 border rounded">
-                            <div class="text-sm text-gray-600 mb-2">Distribute Reserve → All Users (per-user amount)</div>
-                            <div class="flex gap-2 flex-wrap items-center">
-                                <input id="tr-dist-amount" type="text" placeholder="amount per user (e.g. 1h 30m)" class="border rounded px-3 py-2 w-80" />
-                                <button id="tr-dist-btn" type="button" class="bg-emerald-600 text-white px-4 py-2 rounded">Distribute</button>
-                            </div>
-                            <div id="tr-status" class="mt-2 text-sm text-gray-500"></div>
-                        </div>
-                    </div>
-
-                    <div id="tab-jobs" class="mt-10 hidden">
-                        <h3 class="text-lg font-semibold">Create Job</h3>
-                        <div class="mt-2 grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div class="space-y-2">
-                                <div>
-                                    <label class="block text-sm">Key</label>
-                                    <input id="job-key" type="text" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm" placeholder="e.g. city_cleaner">
-                                </div>
-                                <div>
-                                    <label class="block text-sm">Name</label>
-                                    <input id="job-name" type="text" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm" placeholder="City Cleaner">
-                                </div>
-                                <div>
-                                    <label class="block text-sm">Description</label>
-                                    <textarea id="job-desc" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm" rows="3" placeholder="Short description..."></textarea>
-                                </div>
-                            </div>
-                            <div class="space-y-2">
-                                <div class="grid grid-cols-3 gap-3">
-                                    <div>
-                                        <label class="block text-sm">Duration (s)</label>
-                                        <input id="job-duration" type="number" min="1" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm" value="600">
-                                    </div>
-                                    <div>
-                                        <label class="block text-sm">Reward (s)</label>
-                                        <input id="job-reward" type="number" min="1" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm" value="900">
-                                    </div>
-                                    <div>
-                                        <label class="block text-sm">Cooldown (s)</label>
-                                        <input id="job-cooldown" type="number" min="0" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm" value="1800">
-                                    </div>
-                                </div>
-                                <div class="grid grid-cols-3 gap-3 items-end">
-                                    <div>
-                                        <label class="block text-sm">Energy Cost (%)</label>
-                                        <input id="job-energy" type="number" min="0" max="100" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm" value="10">
-                                    </div>
-                                    <div class="flex items-center gap-2">
-                                        <input id="job-active" type="checkbox" class="rounded border-gray-300" checked>
-                                        <label for="job-active" class="text-sm">Active</label>
-                                    </div>
-                                    <div class="text-right">
-                                        <button id="job-create" type="button" class="inline-flex items-center px-4 py-2 bg-indigo-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-indigo-500">Create</button>
-                                    </div>
-                                </div>
-                                <div id="job-status" class="text-sm text-gray-500"></div>
-                            </div>
-                        </div>
-                    </div>
+                    <x-admin-tab-stats />
+                    <x-admin-tab-transfers />
+                    <x-admin-tab-jobs />
+                    <x-admin-tab-store />
 
                     <script>
                         (() => {
@@ -186,6 +23,7 @@
                                 stats: document.getElementById('tab-stats'),
                                 transfers: document.getElementById('tab-transfers'),
                                 jobs: document.getElementById('tab-jobs'),
+                                store: document.getElementById('tab-store'),
                             };
                             const btns = {
                                 stats: document.getElementById('tabbtn-stats'),
@@ -193,6 +31,7 @@
                                 jobs: document.getElementById('tabbtn-jobs'),
                                 store: document.getElementById('tabbtn-store'),
                             };
+                            let sbTimer = null;
                             function activate(name) {
                                 for (const k of Object.keys(tabs)) {
                                     if (k === name) { tabs[k].classList.remove('hidden'); } else { tabs[k].classList.add('hidden'); }
@@ -205,6 +44,13 @@
                                         btns[k].classList.remove('border-b-2','border-indigo-600','text-indigo-700');
                                         btns[k].classList.add('text-gray-600');
                                     }
+                                }
+                                if (name === 'store') {
+                                    if (typeof loadAdminStore === 'function') { loadAdminStore(); }
+                                    if (typeof loadStoreBalance === 'function') { loadStoreBalance(); }
+                                    if (!sbTimer && typeof loadStoreBalance === 'function') { sbTimer = setInterval(loadStoreBalance, 10000); }
+                                } else {
+                                    if (sbTimer) { clearInterval(sbTimer); sbTimer = null; }
                                 }
                             }
                             btns.stats.addEventListener('click', () => activate('stats'));
@@ -297,33 +143,154 @@
                                         credentials: 'same-origin',
                                         body: JSON.stringify(payload),
                                     });
+                                    if (!res.ok) throw new Error();
+                                    const data = await res.json();
+                                    setVals(data.stats);
+                                    status.textContent = 'Saved';
+                                } catch (e) {
+                                    status.textContent = 'Failed to save';
+                                }
+                            }
 
-                            // Admin Store
+                            searchBtn.addEventListener('click', doSearch);
+                            document.getElementById('adm-save').addEventListener('click', save);
+
+                            // Admin Store - moved after save() so it always registers
                             const astItems = document.getElementById('ast-items');
                             const astStatus = document.getElementById('ast-status');
-                            async function loadAdminStore() {
+                            const astf = {
+                                all: document.getElementById('astf-all'),
+                                food: document.getElementById('astf-food'),
+                                water: document.getElementById('astf-water'),
+                                sold: document.getElementById('astf-sold'),
+                            };
+                            const asts = {
+                                asc: document.getElementById('asts-asc'),
+                                desc: document.getElementById('asts-desc'),
+                            };
+                            const astPs = document.getElementById('ast-ps');
+                            const astPrev = document.getElementById('ast-prev');
+                            const astNext = document.getElementById('ast-next');
+                            const astPageInfo = document.getElementById('ast-page-info');
+                            let astCache = [];
+                            let astFilter = 'all';
+                            let astSort = 'desc'; // qty sort: 'asc' | 'desc'
+                            let astPage = 1;
+                            let astPageSize = (parseInt(astPs?.value,10)||20);
+                            function setAstFilter(f){
+                                astFilter = f;
+                                for (const k of Object.keys(astf)){
+                                    const btn = astf[k];
+                                    if (!btn) continue;
+                                    if (k === f){
+                                        btn.classList.add('border-indigo-200','bg-indigo-50','text-indigo-700');
+                                    } else {
+                                        btn.classList.remove('border-indigo-200','bg-indigo-50','text-indigo-700');
+                                    }
+                                }
+                                renderAdminStore();
+                            }
+                            function setAstSort(s){
+                                astSort = s;
+                                for (const k of Object.keys(asts)){
+                                    const btn = asts[k];
+                                    if (!btn) continue;
+                                    if (k === s){
+                                        btn.classList.add('border-indigo-200','bg-indigo-50','text-indigo-700');
+                                    } else {
+                                        btn.classList.remove('border-indigo-200','bg-indigo-50','text-indigo-700');
+                                    }
+                                }
+                                renderAdminStore();
+                            }
+                            function fmtHMS(sec){
+                                sec = Math.max(0, parseInt(sec||0,10));
+                                const h = Math.floor(sec/3600);
+                                const m = Math.floor((sec%3600)/60);
+                                const s = sec%60;
+                                return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+                            }
+                            function effectChips(it){
+                                const chips = [];
+                                const push = (val, label, color) => {
+                                    if ((parseInt(val,10)||0) > 0) chips.push(`<span class=\"px-2 py-0.5 rounded-full ${color} text-xs\">+${parseInt(val,10)}% ${label}</span>`);
+                                };
+                                push(it.restore_food, 'food', 'bg-green-100 text-green-700');
+                                push(it.restore_water, 'water', 'bg-sky-100 text-sky-700');
+                                push(it.restore_energy, 'energy', 'bg-amber-100 text-amber-700');
+                                return chips.length ? chips.join(' ') : '<span class="text-xs text-gray-400">no effect</span>';
+                            }
+                            function renderAdminStore(){
                                 astItems.innerHTML = '';
-                                try {
-                                    const res = await fetch('/admin/store/items', { headers: { 'Accept': 'application/json' } });
-                                    if (!res.ok) throw new Error();
-                                    const items = await res.json();
-                                    if (!Array.isArray(items) || items.length === 0) { astStatus.textContent = 'No items'; return; }
-                                    astStatus.textContent = '';
-                                    for (const it of items) {
+                                let list = Array.isArray(astCache) ? astCache.slice() : [];
+                                if (astFilter === 'food') list = list.filter(i => i.type === 'food');
+                                if (astFilter === 'water') list = list.filter(i => i.type === 'water');
+                                if (astFilter === 'sold') list = list.filter(i => (parseInt(i.quantity,10)||0) === 0);
+                                list.sort((a,b) => {
+                                    const qa = parseInt(a.quantity,10)||0;
+                                    const qb = parseInt(b.quantity,10)||0;
+                                    return astSort === 'asc' ? qa - qb : qb - qa;
+                                });
+                                if (list.length === 0){
+                                    astStatus.textContent = 'No items';
+                                    if (astPageInfo){ astPageInfo.textContent = 'Page 0 of 0 • 0 items'; }
+                                    if (astPrev) astPrev.disabled = true;
+                                    if (astNext) astNext.disabled = true;
+                                    return;
+                                }
+                                astStatus.textContent = '';
+                                const total = list.length;
+                                const pages = Math.max(1, Math.ceil(total / astPageSize));
+                                astPage = Math.max(1, Math.min(astPage, pages));
+                                const start = (astPage - 1) * astPageSize;
+                                const end = Math.min(total, start + astPageSize);
+                                const pageItems = list.slice(start, end);
+                                if (astPageInfo){ astPageInfo.textContent = `Page ${astPage} of ${pages} • ${total} items`; }
+                                if (astPrev){ astPrev.disabled = astPage <= 1; astPrev.classList.toggle('opacity-50', astPrev.disabled); }
+                                if (astNext){ astNext.disabled = astPage >= pages; astNext.classList.toggle('opacity-50', astNext.disabled); }
+                                for (const it of pageItems) {
                                         const tr = document.createElement('tr');
-                                        tr.innerHTML = `<td class="py-1 pr-2">${it.name}</td>
-                                                        <td class="py-1 pr-2">${it.type}</td>
-                                                        <td class="py-1 pr-2">${it.price_seconds}</td>
-                                                        <td class="py-1 pr-2">${it.quantity}</td>
-                                                        <td class="py-1 pr-2 text-xs">+${it.restore_food}% food, +${it.restore_water}% water, +${it.restore_energy}% energy</td>
-                                                        <td class="py-1"><input data-id="${it.id}" class="rstk w-20 border rounded px-2 py-1" type="number" min="1" placeholder="qty"> <button data-id="${it.id}" class="rstkbtn px-2 py-1 bg-emerald-600 text-white rounded">Add</button></td>`;
+                                        tr.className = 'border-b hover:bg-gray-50';
+                                        tr.innerHTML = `<td class=\"py-2 pr-3 align-top\"><div class=\"font-medium text-gray-800\">${it.name}</div><div class=\"text-xs text-gray-500\">${it.description||''}</div></td>
+                                                        <td class=\"py-2 pr-3 align-top\"><span class=\"px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 text-xs\">${it.type}</span></td>
+                                                        <td class=\"py-2 pr-3 align-top\"><code class=\"text-indigo-700\">${fmtHMS(it.price_seconds)}</code></td>
+                                                        <td class=\"py-2 pr-3 align-top\"><span class=\"px-2 py-0.5 rounded bg-gray-100 text-gray-700 text-xs\">${it.quantity}</span></td>
+                                                        <td class=\"py-2 pr-3 align-top space-x-1\">${effectChips(it)}</td>
+                                                        <td class=\"py-2 align-top\">
+                                                            <div class=\"flex items-center gap-2\">
+                                                                <input data-id=\"${it.id}\" data-price=\"${it.price_seconds}\" data-name=\"${it.name.replace(/"/g,'&quot;')}\" class=\"rstk w-24 border rounded px-2 py-1 text-sm\" type=\"number\" min=\"1\" placeholder=\"qty\">
+                                                                <button data-id=\"${it.id}\" data-price=\"${it.price_seconds}\" data-name=\"${it.name.replace(/"/g,'&quot;')}\" class=\"rstkbtn px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-sm\">Add</button>
+                                                            </div>
+                                                        </td>`;
                                         astItems.appendChild(tr);
                                     }
                                     document.querySelectorAll('.rstkbtn').forEach(btn => btn.addEventListener('click', async (e) => {
                                         const id = e.target.getAttribute('data-id');
-                                        const qtyEl = document.querySelector(`input.rstk[data-id="${id}"]`);
+                                        const price = parseInt(e.target.getAttribute('data-price'),10)||0;
+                                        const name = e.target.getAttribute('data-name')||'Item';
+                                        const qtyEl = document.querySelector(`input.rstk[data-id=\"${id}\"]`);
                                         const qty = parseInt(qtyEl.value, 10) || 0;
                                         if (qty <= 0) { astStatus.textContent = 'Enter quantity'; return; }
+                                        const cost = Math.floor((price * qty) / 2);
+                                        let proceed = true;
+                                        if (window.Swal) {
+                                            const { isConfirmed } = await Swal.fire({
+                                                title: 'Confirm Restock',
+                                                html: `<div class=\"text-left space-y-1\">`
+                                                    + `<div><strong>Item:</strong> ${name}</div>`
+                                                    + `<div><strong>Quantity:</strong> ${qty}</div>`
+                                                    + `<div><strong>Price per unit:</strong> ${fmtHMS(price)}</div>`
+                                                    + `<div><strong>Cost (50%):</strong> ${fmtHMS(cost)}</div>`
+                                                    + `</div>`,
+                                                icon: 'question',
+                                                showCancelButton: true,
+                                                confirmButtonText: 'Proceed',
+                                            });
+                                            proceed = isConfirmed;
+                                        } else {
+                                            proceed = window.confirm(`Restock ${name}\nQty: ${qty}\nPrice: ${fmtHMS(price)} each\nCost to Store Balance (50%): ${fmtHMS(cost)}\n\nProceed?`);
+                                        }
+                                        if (!proceed) return;
                                         astStatus.textContent = 'Restocking...';
                                         try {
                                             const res = await fetch(`/admin/store/items/${id}/restock`, {
@@ -336,16 +303,63 @@
                                             if (!res.ok || !data.ok) throw new Error();
                                             astStatus.textContent = 'Restocked';
                                             await loadAdminStore();
+                                            if (typeof loadStoreBalance === 'function') { loadStoreBalance(); }
                                         } catch (err) { astStatus.textContent = 'Failed to restock'; }
                                     }));
+                            }
+
+                            async function loadAdminStore() {
+                                try {
+                                    const res = await fetch('/admin/store/items', { headers: { 'Accept': 'application/json' } });
+                                    if (!res.ok) throw new Error();
+                                    astCache = await res.json();
+                                    astPage = 1;
+                                    renderAdminStore();
                                 } catch (e) { astStatus.textContent = 'Failed to load items'; }
                             }
 
+                            // Store Balance
+                            const sbValue = document.getElementById('sb-value');
+                            const sbStatus = document.getElementById('sb-status');
+                            async function loadStoreBalance(){
+                                try {
+                                    const res = await fetch('/admin/store/balance', { headers: { 'Accept': 'application/json' } });
+                                    if (!res.ok) throw new Error();
+                                    const data = await res.json();
+                                    sbValue.textContent = fmtHMS(parseInt(data.seconds,10)||0);
+                                } catch(e){ sbValue.textContent = '--:--:--'; }
+                            }
+                            document.getElementById('sb-refresh').addEventListener('click', loadStoreBalance);
+                            document.getElementById('sb-transfer').addEventListener('click', async () => {
+                                const mode = (document.getElementById('sb-amount').value || 'all').trim() || 'all';
+                                sbStatus.textContent = 'Transferring...';
+                                try {
+                                    const res = await fetch('/admin/store/balance/transfer', {
+                                        method: 'POST',
+                                        headers: { 'Accept': 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf, 'X-XSRF-TOKEN': xsrf, 'X-Requested-With': 'XMLHttpRequest' },
+                                        credentials: 'same-origin',
+                                        body: JSON.stringify({ mode })
+                                    });
+                                    const data = await res.json();
+                                    if (!res.ok || !data.ok) throw new Error(data.message || 'Failed');
+                                    sbStatus.textContent = `Moved ${data.moved_seconds} seconds to Reserve`;
+                                    await loadStoreBalance();
+                                } catch (e) { sbStatus.textContent = 'Transfer failed'; }
+                            });
+
                             document.getElementById('tabbtn-store').addEventListener('click', loadAdminStore);
+                            astf.all.addEventListener('click', () => setAstFilter('all'));
+                            astf.food.addEventListener('click', () => setAstFilter('food'));
+                            astf.water.addEventListener('click', () => setAstFilter('water'));
+                            astf.sold.addEventListener('click', () => setAstFilter('sold'));
+                            asts.asc.addEventListener('click', () => setAstSort('asc'));
+                            asts.desc.addEventListener('click', () => setAstSort('desc'));
+                            if (astPs) astPs.addEventListener('change', () => { astPageSize = parseInt(astPs.value,10)||20; astPage = 1; renderAdminStore(); });
+                            if (astPrev) astPrev.addEventListener('click', () => { if (astPage > 1) { astPage--; renderAdminStore(); } });
+                            if (astNext) astNext.addEventListener('click', () => { astPage++; renderAdminStore(); });
 
                             const ciStatus = document.getElementById('ci-status');
                             document.getElementById('ci-create').addEventListener('click', async () => {
-                                ciStatus.textContent = 'Creating...';
                                 const payload = {
                                     key: document.getElementById('ci-key').value.trim(),
                                     name: document.getElementById('ci-name').value.trim(),
@@ -358,6 +372,30 @@
                                     restore_energy: parseInt(document.getElementById('ci-re').value, 10) || 0,
                                     is_active: !!document.getElementById('ci-active').checked,
                                 };
+                                const price = payload.price_seconds;
+                                const qty = payload.quantity;
+                                const cost = Math.floor((price * qty) / 2);
+                                let proceed = true;
+                                if (window.Swal) {
+                                    const { isConfirmed } = await Swal.fire({
+                                        title: 'Confirm Create Item',
+                                        html: `<div class=\"text-left space-y-1\">`
+                                            + `<div><strong>Name:</strong> ${payload.name || '(unnamed)'} </div>`
+                                            + `<div><strong>Type:</strong> ${payload.type}</div>`
+                                            + `<div><strong>Quantity:</strong> ${qty}</div>`
+                                            + `<div><strong>Price per unit:</strong> ${fmtHMS(price)}</div>`
+                                            + `<div><strong>Cost (50%):</strong> ${fmtHMS(cost)}</div>`
+                                            + `</div>`,
+                                        icon: 'question',
+                                        showCancelButton: true,
+                                        confirmButtonText: 'Create',
+                                    });
+                                    proceed = isConfirmed;
+                                } else {
+                                    proceed = window.confirm(`Create item ${payload.name || ''}\nQty: ${qty}\nPrice: ${fmtHMS(price)} each\nCost to Store Balance (50%): ${fmtHMS(cost)}\n\nProceed?`);
+                                }
+                                if (!proceed) return;
+                                ciStatus.textContent = 'Creating...';
                                 try {
                                     const res = await fetch('/admin/store/items', {
                                         method: 'POST',
@@ -369,19 +407,9 @@
                                     if (!res.ok || !data.ok) throw new Error();
                                     ciStatus.textContent = 'Item created';
                                     await loadAdminStore();
+                                    if (typeof loadStoreBalance === 'function') { loadStoreBalance(); }
                                 } catch (e) { ciStatus.textContent = 'Failed to create item'; }
                             });
-                                    if (!res.ok) throw new Error();
-                                    const data = await res.json();
-                                    setVals(data.stats);
-                                    status.textContent = 'Saved';
-                                } catch (e) {
-                                    status.textContent = 'Failed to save';
-                                }
-                            }
-
-                            searchBtn.addEventListener('click', doSearch);
-                            document.getElementById('adm-save').addEventListener('click', save);
 
                             // Create Job
                             const jobCreateBtn = document.getElementById('job-create');
@@ -471,6 +499,27 @@
                                         trStatus.textContent = (r && r.message) ? r.message : 'Distribution failed';
                                     }
                                 } catch (e) { trStatus.textContent = 'Distribution failed'; }
+                            });
+
+                            // Reserve -> Store
+                            const trRsStatus = document.getElementById('tr-rs-status');
+                            document.getElementById('tr-rs-btn').addEventListener('click', async () => {
+                                const amount = document.getElementById('tr-rs-amount').value.trim();
+                                if (!amount) { trRsStatus.textContent = 'Enter an amount'; return; }
+                                trRsStatus.textContent = 'Transferring...';
+                                try {
+                                    const res = await fetch('/admin/store/balance/from-reserve', {
+                                        method: 'POST',
+                                        headers: { 'Accept': 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf, 'X-XSRF-TOKEN': xsrf, 'X-Requested-With': 'XMLHttpRequest' },
+                                        credentials: 'same-origin',
+                                        body: JSON.stringify({ amount })
+                                    });
+                                    const data = await res.json();
+                                    if (!res.ok || !data.ok) throw new Error(data.message || 'Failed');
+                                    trRsStatus.textContent = `Moved ${data.moved_seconds} seconds to Store`;
+                                    // Also refresh the Store Balance card if present
+                                    if (typeof loadStoreBalance === 'function') { loadStoreBalance(); }
+                                } catch (e) { trRsStatus.textContent = 'Transfer failed'; }
                             });
                         })();
                     </script>

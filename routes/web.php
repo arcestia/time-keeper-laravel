@@ -44,6 +44,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/admin/store/items', [\App\Http\Controllers\AdminController::class, 'storeItems'])->name('admin.store.items');
     Route::post('/admin/store/items', [\App\Http\Controllers\AdminController::class, 'createStoreItem'])->name('admin.store.items.create');
     Route::post('/admin/store/items/{id}/restock', [\App\Http\Controllers\AdminController::class, 'restockStoreItem'])->name('admin.store.items.restock');
+    Route::get('/admin/store/balance', [\App\Http\Controllers\AdminController::class, 'storeBalance'])->name('admin.store.balance');
+    Route::post('/admin/store/balance/transfer', [\App\Http\Controllers\AdminController::class, 'transferStoreBalanceToReserve'])->name('admin.store.balance.transfer');
+    Route::post('/admin/store/balance/from-reserve', [\App\Http\Controllers\AdminController::class, 'transferReserveToStore'])->name('admin.store.balance.from_reserve');
 
     // Jobs system
     Route::get('/jobs', [JobsController::class, 'page'])->name('jobs.page');
@@ -54,6 +57,12 @@ Route::middleware('auth')->group(function () {
     // Store
     Route::get('/store', [StoreController::class, 'page'])->name('store.page');
     Route::get('/api/store/items', [StoreController::class, 'items'])->name('store.items');
+
+    // Premium
+    Route::get('/premium', [\App\Http\Controllers\PremiumController::class, 'page'])->name('premium.page');
+    Route::get('/api/premium/status', [\App\Http\Controllers\PremiumController::class, 'status'])->name('premium.status');
+    Route::post('/api/premium/buy', [\App\Http\Controllers\PremiumController::class, 'buy'])->name('premium.buy');
+    Route::post('/api/premium/heal', [\App\Http\Controllers\PremiumController::class, 'heal'])->name('premium.heal');
     Route::get('/api/store/balances', [StoreController::class, 'balances'])->name('store.balances');
     Route::post('/api/store/buy/{key}', [StoreController::class, 'buy'])->name('store.buy');
 

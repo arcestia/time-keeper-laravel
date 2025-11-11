@@ -10,6 +10,10 @@ use App\Models\User;
 use App\Models\UserStats;
 use App\Models\JobCatalog;
 use App\Models\StoreItem;
+use Flasher\Laravel\Facade\Flasher;
+use App\Models\StoreBalance;
+use App\Models\TimeKeeperReserve;
+use App\Support\TimeUnits;
 
 class AdminController extends Controller
 {
@@ -18,6 +22,92 @@ class AdminController extends Controller
         $user = Auth::user();
         abort_unless($user && $user->is_admin, 403);
         return view('admin.index');
+    }
+
+    public function transferReserveToStore(Request $request): JsonResponse
+    {
+        $user = Auth::user();
+        abort_unless($user && $user->is_admin, 403);
+        $amountStr = (string) $request->input('amount', '');
+        $seconds = TimeUnits::parseToSeconds($amountStr);
+        if ($seconds <= 0) {
+            Flasher::addError('Amount must be > 0');
+            session()->flash('error', 'Amount must be > 0');
+            return response()->json(['ok' => false, 'message' => 'Amount must be > 0'], 422);
+        }
+
+        $moved = DB::transaction(function () use ($seconds) {
+            $reserve = TimeKeeperReserve::query()->lockForUpdate()->first();
+            if (!$reserve) { $reserve = TimeKeeperReserve::create(['balance_seconds' => 0]); }
+            $amount = min((int)$seconds, max(0, (int)$reserve->balance_seconds));
+            if ($amount <= 0) {
+                return 0;
+            }
+            $reserve->balance_seconds = (int)$reserve->balance_seconds - $amount;
+            $reserve->save();
+
+            $store = StoreBalance::query()->lockForUpdate()->first();
+            if (!$store) { $store = StoreBalance::create(['balance_seconds' => 0]); }
+            $store->balance_seconds = (int)$store->balance_seconds + $amount;
+            $store->save();
+
+            return $amount;
+        });
+
+        if ($moved > 0) {
+            Flasher::addSuccess('Transferred ' . $moved . 's from Reserve to Store');
+            session()->flash('success', 'Transferred ' . $moved . 's from Reserve to Store');
+            return response()->json(['ok' => true, 'moved_seconds' => (int)$moved]);
+        }
+        Flasher::addError('Reserve has insufficient balance');
+        session()->flash('error', 'Reserve has insufficient balance');
+        return response()->json(['ok' => false, 'message' => 'Insufficient reserve'], 422);
+    }
+
+    public function storeBalance(): JsonResponse
+    {
+        $user = Auth::user();
+        abort_unless($user && $user->is_admin, 403);
+        $bal = StoreBalance::first();
+        return response()->json(['seconds' => (int)($bal->balance_seconds ?? 0)]);
+    }
+
+    public function transferStoreBalanceToReserve(Request $request): JsonResponse
+    {
+        $user = Auth::user();
+        abort_unless($user && $user->is_admin, 403);
+        $mode = $request->input('mode', 'all');
+
+        $moved = DB::transaction(function () use ($mode) {
+            $sb = StoreBalance::query()->lockForUpdate()->first();
+            if (!$sb) { $sb = StoreBalance::create(['balance_seconds' => 0]); }
+            $amount = (int) $sb->balance_seconds;
+            if ($mode !== 'all') {
+                $to = TimeUnits::parseToSeconds((string)$mode);
+                if ($to > 0) { $amount = min($amount, $to); }
+            }
+            if ($amount <= 0) {
+                return 0;
+            }
+            $sb->balance_seconds = (int)$sb->balance_seconds - $amount;
+            $sb->save();
+
+            $reserve = TimeKeeperReserve::query()->lockForUpdate()->first();
+            if (!$reserve) { $reserve = TimeKeeperReserve::create(['balance_seconds' => 0]); }
+            $reserve->balance_seconds = (int)$reserve->balance_seconds + $amount;
+            $reserve->save();
+
+            return $amount;
+        });
+
+        if ($moved > 0) {
+            Flasher::addSuccess('Transferred ' . $moved . 's from Store to Reserve');
+            session()->flash('success', 'Transferred ' . $moved . 's from Store to Reserve');
+            return response()->json(['ok' => true, 'moved_seconds' => (int)$moved]);
+        }
+        Flasher::addError('No store balance available to transfer');
+        session()->flash('error', 'No store balance available to transfer');
+        return response()->json(['ok' => false, 'message' => 'No store balance'], 422);
     }
 
     public function usersSearch(Request $request): JsonResponse
@@ -83,7 +173,8 @@ class AdminController extends Controller
             return $stats;
         });
 
-        flasher()->addSuccess('Updated stats for user ID ' . $target->id);
+        Flasher::addSuccess('Updated stats for user ID ' . $target->id);
+        session()->flash('success', 'Updated stats for user ID ' . $target->id);
         return response()->json([
             'ok' => true,
             'stats' => [
@@ -123,7 +214,8 @@ class AdminController extends Controller
             'is_active' => (bool)($validated['is_active'] ?? true),
         ]);
 
-        flasher()->addSuccess('Job created: ' . $job->name);
+        Flasher::addSuccess('Job created: ' . $job->name);
+        session()->flash('success', 'Job created: ' . $job->name);
         return response()->json([
             'ok' => true,
             'job' => $job,
@@ -157,20 +249,35 @@ class AdminController extends Controller
             'is_active' => 'sometimes|boolean',
         ])->validate();
 
-        $item = StoreItem::create([
-            'key' => $validated['key'],
-            'name' => $validated['name'],
-            'type' => $validated['type'],
-            'description' => $validated['description'] ?? null,
-            'price_seconds' => (int)$validated['price_seconds'],
-            'quantity' => (int)$validated['quantity'],
-            'restore_food' => (int)$validated['restore_food'],
-            'restore_water' => (int)$validated['restore_water'],
-            'restore_energy' => (int)$validated['restore_energy'],
-            'is_active' => (bool)($validated['is_active'] ?? true),
-        ]);
+        $item = DB::transaction(function () use ($validated) {
+            $price = (int)$validated['price_seconds'];
+            $qty = (int)$validated['quantity'];
+            $cost = intdiv($price * $qty, 2); // 50%
 
-        flasher()->addSuccess('Store item created: ' . $item->name);
+            $sb = StoreBalance::query()->lockForUpdate()->first();
+            if (!$sb) { $sb = StoreBalance::create(['balance_seconds' => 0]); }
+            if ((int)$sb->balance_seconds < $cost) {
+                abort(422, 'Store balance insufficient for creation cost');
+            }
+            $sb->balance_seconds = (int)$sb->balance_seconds - $cost;
+            $sb->save();
+
+            return StoreItem::create([
+                'key' => $validated['key'],
+                'name' => $validated['name'],
+                'type' => $validated['type'],
+                'description' => $validated['description'] ?? null,
+                'price_seconds' => $price,
+                'quantity' => $qty,
+                'restore_food' => (int)$validated['restore_food'],
+                'restore_water' => (int)$validated['restore_water'],
+                'restore_energy' => (int)$validated['restore_energy'],
+                'is_active' => (bool)($validated['is_active'] ?? true),
+            ]);
+        });
+
+        Flasher::addSuccess('Store item created: ' . $item->name);
+        session()->flash('success', 'Store item created: ' . $item->name);
         return response()->json(['ok' => true, 'item' => $item]);
     }
 
@@ -182,11 +289,28 @@ class AdminController extends Controller
             'quantity' => 'required|integer|min:1'
         ])->validate();
 
-        $item = StoreItem::query()->lockForUpdate()->findOrFail($id);
-        $item->quantity = (int)$item->quantity + (int)$validated['quantity'];
-        $item->save();
+        [$item, $newQty] = DB::transaction(function () use ($id, $validated) {
+            $item = StoreItem::query()->lockForUpdate()->findOrFail($id);
+            $qty = (int)$validated['quantity'];
+            $price = (int)$item->price_seconds;
+            $cost = intdiv($price * $qty, 2); // 50%
 
-        flasher()->addSuccess('Restocked ' . $validated['quantity'] . ' units of ' . $item->name);
-        return response()->json(['ok' => true, 'quantity' => (int)$item->quantity]);
+            $sb = StoreBalance::query()->lockForUpdate()->first();
+            if (!$sb) { $sb = StoreBalance::create(['balance_seconds' => 0]); }
+            if ((int)$sb->balance_seconds < $cost) {
+                abort(422, 'Store balance insufficient for restock cost');
+            }
+            $sb->balance_seconds = (int)$sb->balance_seconds - $cost;
+            $sb->save();
+
+            $item->quantity = (int)$item->quantity + $qty;
+            $item->save();
+
+            return [$item, (int)$item->quantity];
+        });
+
+        Flasher::addSuccess('Restocked ' . $validated['quantity'] . ' units of ' . $item->name);
+        session()->flash('success', 'Restocked ' . $validated['quantity'] . ' units of ' . $item->name);
+        return response()->json(['ok' => true, 'quantity' => (int)$newQty]);
     }
 }

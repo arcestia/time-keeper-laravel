@@ -37,6 +37,21 @@
                 const m = document.cookie.match(new RegExp('(?:^|; )' + name.replace(/([.$?*|{}()\[\]\\\/\+^])/g,'\\$1') + '=([^;]*)'));
                 return m ? decodeURIComponent(m[1]) : '';
             }
+
+            function renderFlashesFromResponse(res) {
+                try {
+                    if (!window.flasher) return;
+                    const h1 = res.headers.get('X-Flasher');
+                    const h2 = res.headers.get('X-Flash');
+                    const payload = h1 || h2;
+                    if (payload) {
+                        const data = JSON.parse(payload);
+                        if (Array.isArray(data) || typeof data === 'object') {
+                            window.flasher.render(data);
+                        }
+                    }
+                } catch (_) { /* ignore */ }
+            }
             const xsrf = readCookie('XSRF-TOKEN');
             const list = document.getElementById('st-list');
             const status = document.getElementById('st-status');
@@ -168,6 +183,7 @@
                             },
                             credentials: 'same-origin',
                         });
+                        renderFlashesFromResponse(res);
                         if (!res.ok) throw new Error();
                         status.textContent = 'Purchased ' + item.name;
                         await refresh();

@@ -1,0 +1,119 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\Premium;
+use App\Models\User;
+use Carbon\CarbonImmutable;
+use App\Models\Setting;
+
+class PremiumService
+{
+    // Tier thresholds in seconds (accumulated). T20 implies lifetime.
+    public static function thresholds(): array
+    {
+        $fromDb = Setting::get('premium.tiers.thresholds_seconds', null);
+        if (!is_array($fromDb)) { return []; }
+        $th = [];
+        for ($i = 1; $i <= 20; $i++) {
+            $v = $fromDb[$i] ?? ($fromDb[(string)$i] ?? null);
+            if ($v === null) { continue; }
+            $th[$i] = (int)$v;
+        }
+        return $th;
+    }
+
+    public static function tierFor(int $accumulatedSeconds): int
+    {
+        $tier = 0;
+        foreach (self::thresholds() as $t => $req) {
+            if ($accumulatedSeconds >= $req) { $tier = $t; } else { break; }
+        }
+        return max(0, min(20, $tier));
+    }
+
+    public static function benefitsForTier(int $tier): array
+    {
+        if ($tier <= 0) return [
+            'cap_multiplier' => 1.0,
+            'reward_multiplier' => 1.0,
+            'store_discount_pct' => 0,
+            'heals_per_week' => 0,
+        ];
+        // Linear scaling
+        $capMin = 1.20; $capMax = 11.00; // +20% -> +1000%
+        $rewardMin = 1.05; $rewardMax = 2.50; // +5% -> +150%
+        $discMin = 1; $discMax = 30; // percent
+        $steps = 19; $pos = ($tier - 1);
+        $cap = $capMin + ($capMax - $capMin) * ($pos / $steps);
+        $reward = $rewardMin + ($rewardMax - $rewardMin) * ($pos / $steps);
+        $discount = (int)round($discMin + ($discMax - $discMin) * ($pos / $steps));
+        $heals = 0;
+        if ($tier >= 5) {
+            if ($tier >= 17) $heals = 5; else if ($tier >= 14) $heals = 4; else if ($tier >= 11) $heals = 3; else if ($tier >= 8) $heals = 2; else $heals = 1;
+        }
+        return [
+            'cap_multiplier' => $cap,
+            'reward_multiplier' => $reward,
+            'store_discount_pct' => $discount,
+            'heals_per_week' => $heals,
+        ];
+    }
+
+    public static function getOrCreate(int $userId): Premium
+    {
+        $p = Premium::where('user_id', $userId)->first();
+        if (!$p) {
+            $p = Premium::create([
+                'user_id' => $userId,
+                'premium_expires_at' => null,
+                'premium_seconds_accumulated' => 0,
+                'lifetime' => false,
+                'weekly_heal_used' => 0,
+                'weekly_heal_reset_at' => null,
+            ]);
+        }
+        return $p;
+    }
+
+    public static function isActive(Premium $p): bool
+    {
+        if ($p->lifetime) return true;
+        if (!$p->premium_expires_at) return false;
+        return CarbonImmutable::now()->lt(CarbonImmutable::parse($p->premium_expires_at));
+    }
+
+    public static function grant(Premium $p, int $seconds): Premium
+    {
+        $add = max(0, $seconds);
+        // Extend expiration from now or existing expiration, whichever is later
+        $base = $p->premium_expires_at ? CarbonImmutable::parse($p->premium_expires_at) : CarbonImmutable::now();
+        if ($base->lt(CarbonImmutable::now())) { $base = CarbonImmutable::now(); }
+        $p->premium_expires_at = $base->addSeconds($add);
+        $p->premium_seconds_accumulated = (int)$p->premium_seconds_accumulated + $add;
+        $tier = self::tierFor((int)$p->premium_seconds_accumulated);
+        if ($tier >= 20) { $p->lifetime = true; }
+        $p->save();
+        return $p;
+    }
+
+    public static function remainingSeconds(Premium $p): int
+    {
+        if ($p->lifetime) return PHP_INT_MAX;
+        if (!$p->premium_expires_at) return 0;
+        $now = CarbonImmutable::now();
+        $exp = CarbonImmutable::parse($p->premium_expires_at);
+        if ($now->gte($exp)) return 0;
+        return $exp->diffInSeconds($now);
+    }
+
+    public static function weeklyResetIfNeeded(Premium $p): void
+    {
+        $now = CarbonImmutable::now();
+        if (!$p->weekly_heal_reset_at || $now->greaterThan($p->weekly_heal_reset_at)) {
+            $p->weekly_heal_reset_at = $now->endOfWeek();
+            $p->weekly_heal_used = 0;
+            $p->save();
+        }
+    }
+}

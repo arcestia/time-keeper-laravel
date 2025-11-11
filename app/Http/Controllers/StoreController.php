@@ -10,6 +10,10 @@ use App\Models\UserStats;
 use App\Models\UserTimeWallet;
 use App\Models\TimeAccount;
 use Carbon\CarbonImmutable;
+use Flasher\Laravel\Facade\Flasher;
+use App\Models\StoreBalance;
+use App\Services\PremiumService;
+use App\Models\Premium;
 
 class StoreController extends Controller
 {
@@ -49,10 +53,21 @@ class StoreController extends Controller
             // Lock item for stock check
             $lockedItem = StoreItem::query()->where('id', $item->id)->lockForUpdate()->first();
             if ((int)($lockedItem->quantity ?? 0) < $qty) {
-                flasher()->addError('Item out of stock');
+                Flasher::addError('Item out of stock');
+                session()->flash('error', 'Item out of stock');
                 abort(422, 'Item out of stock');
             }
             $pricePer = (int)$lockedItem->price_seconds;
+            // Premium discount
+            $prem = PremiumService::getOrCreate($user->id);
+            if (PremiumService::isActive($prem)) {
+                $tier = PremiumService::tierFor((int)$prem->premium_seconds_accumulated);
+                $benefits = PremiumService::benefitsForTier($tier);
+                $disc = (int)($benefits['store_discount_pct'] ?? 0);
+                if ($disc > 0) {
+                    $pricePer = max(0, (int)floor($pricePer * (100 - $disc) / 100));
+                }
+            }
             $price = $pricePer * $qty;
             $paidFrom = $source;
             $wallet = null;
@@ -69,7 +84,8 @@ class StoreController extends Controller
                     ]);
                 }
                 if ((int)$wallet->available_seconds < $price) {
-                    flasher()->addError('Not enough time balance in wallet');
+                    Flasher::addError('Not enough time balance in wallet');
+                    session()->flash('error', 'Not enough time balance in wallet');
                     abort(422, 'Not enough time balance in wallet');
                 }
                 $wallet->available_seconds = (int)$wallet->available_seconds - $price;
@@ -80,20 +96,35 @@ class StoreController extends Controller
                     $bank = TimeAccount::create(['user_id' => $user->id, 'base_balance_seconds' => 0]);
                 }
                 if ((int)$bank->base_balance_seconds < $price) {
-                    flasher()->addError('Not enough time balance in bank');
+                    Flasher::addError('Not enough time balance in bank');
+                    session()->flash('error', 'Not enough time balance in bank');
                     abort(422, 'Not enough time balance in bank');
                 }
                 $bank->base_balance_seconds = (int)$bank->base_balance_seconds - $price;
                 $bank->save();
             }
 
+            // Credit store balance with total price
+            $storeBalance = StoreBalance::query()->lockForUpdate()->first();
+            if (!$storeBalance) { $storeBalance = StoreBalance::create(['balance_seconds' => 0]); }
+            $storeBalance->balance_seconds = (int)$storeBalance->balance_seconds + $price;
+            $storeBalance->save();
+
             $stats = UserStats::query()->where('user_id', $user->id)->lockForUpdate()->first();
             if (!$stats) {
                 $stats = UserStats::create(['user_id' => $user->id, 'energy' => 100, 'food' => 100, 'water' => 100, 'leisure' => 100, 'health' => 100]);
             }
-            $stats->food = min(100, (int)$stats->food + ((int)$lockedItem->restore_food * $qty));
-            $stats->water = min(100, (int)$stats->water + ((int)$lockedItem->restore_water * $qty));
-            $stats->energy = min(100, (int)$stats->energy + ((int)$lockedItem->restore_energy * $qty));
+            // Premium stats cap multiplier
+            $capMult = 1.0;
+            if (PremiumService::isActive($prem)) {
+                $tier = PremiumService::tierFor((int)$prem->premium_seconds_accumulated);
+                $benefits = PremiumService::benefitsForTier($tier);
+                $capMult = (float)($benefits['cap_multiplier'] ?? 1.0);
+            }
+            $cap = (int) floor(100 * $capMult);
+            $stats->food = min($cap, (int)$stats->food + ((int)$lockedItem->restore_food * $qty));
+            $stats->water = min($cap, (int)$stats->water + ((int)$lockedItem->restore_water * $qty));
+            $stats->energy = min($cap, (int)$stats->energy + ((int)$lockedItem->restore_energy * $qty));
             $stats->save();
 
             // Decrement stock
@@ -104,7 +135,8 @@ class StoreController extends Controller
         });
 
         [$wallet, $bank, $stats, $lockedItem, $paidFrom, $price, $qty] = $result;
-        flasher()->addSuccess('Purchased ' . $qty . ' x ' . $item->name . ' via ' . $paidFrom);
+        Flasher::addSuccess('Purchased ' . $qty . ' x ' . $item->name . ' via ' . $paidFrom);
+        session()->flash('success', 'Purchased ' . $qty . ' x ' . $item->name . ' via ' . $paidFrom);
         return response()->json([
             'ok' => true,
             'paid_from' => $paidFrom,

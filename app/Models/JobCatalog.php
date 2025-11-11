@@ -12,7 +12,7 @@ class JobCatalog extends Model
     protected $table = 'jobs_catalog';
 
     protected $fillable = [
-        'key', 'name', 'description', 'duration_seconds', 'reward_seconds', 'cooldown_seconds', 'energy_cost', 'is_active'
+        'key', 'name', 'description', 'duration_seconds', 'reward_seconds', 'cooldown_seconds', 'energy_cost', 'is_active', 'premium_only'
     ];
 
     protected $casts = [
@@ -21,5 +21,6 @@ class JobCatalog extends Model
         'cooldown_seconds' => 'integer',
         'energy_cost' => 'integer',
         'is_active' => 'boolean',
+        'premium_only' => 'boolean',
     ];
 }

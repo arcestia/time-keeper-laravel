@@ -9,7 +9,12 @@
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
             <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                 <div class="p-6 text-gray-900">
-                    {{ __("You're logged in!") }}
+                    <div class="p-4 border rounded-lg">
+                        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                            <div class="text-lg font-semibold">Welcome, {{ Auth::user()->name }}</div>
+                            <div class="text-sm text-gray-600">Premium: <span id="db-premium-status">Loading...</span> • Tier <span id="db-premium-tier">-</span> <span id="db-premium-remaining-wrap" class="hidden">• Remaining <span id="db-premium-remaining" class="font-medium"></span></span></div>
+                        </div>
+                    </div>
                     <div class="mt-6 grid grid-cols-1 gap-4">
                         <div class="p-4 border rounded-lg">
                             <div class="flex items-center justify-between">
@@ -70,6 +75,9 @@
                             };
                             let current = 0;
                             let last = Date.now();
+                            let premRemaining = 0; // seconds
+                            let premActive = false;
+                            let premLifetime = false;
 
                             function fmt(sec) {
                                 sec = Math.max(0, parseInt(sec || 0, 10));
@@ -95,8 +103,53 @@
                                     String(ss).padStart(2, '0'),
                                 ].join(':');
                             }
+                            function fmtShort(sec){
+                                sec = Math.max(0, parseInt(sec||0,10));
+                                const h = Math.floor(sec/3600); sec %= 3600;
+                                const m = Math.floor(sec/60);
+                                const s = sec % 60;
+                                return [String(h).padStart(2,'0'), String(m).padStart(2,'0'), String(s).padStart(2,'0')].join(':');
+                            }
+
+                            function badge(html, cls){ return `<span class=\"inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${cls}\">${html}</span>`; }
+                            function statusBadge(active, lifetime){
+                                if (!active) return badge('Inactive','bg-gray-100 text-gray-700');
+                                if (lifetime) return badge('Active • Lifetime','bg-fuchsia-100 text-fuchsia-700');
+                                return badge('Active','bg-emerald-100 text-emerald-700');
+                            }
+                            function tierBadge(tier){
+                                tier = parseInt(tier||0,10);
+                                let cls = 'bg-gray-100 text-gray-700', label = `Tier ${tier}`;
+                                if (tier >= 20) { cls = 'bg-fuchsia-100 text-fuchsia-700'; label = 'Tier 20 • Diamond'; }
+                                else if (tier >= 15) { cls = 'bg-sky-100 text-sky-700'; label += ' • Platinum'; }
+                                else if (tier >= 10) { cls = 'bg-amber-100 text-amber-800'; label += ' • Gold'; }
+                                else if (tier >= 5) { cls = 'bg-slate-200 text-slate-800'; label += ' • Silver'; }
+                                else if (tier >= 1) { cls = 'bg-orange-100 text-orange-700'; label += ' • Bronze'; }
+                                return badge(label, cls);
+                            }
 
                             async function refresh() {
+                                // Premium status
+                                try {
+                                    const rp = await fetch('/api/premium/status', { headers: { 'Accept': 'application/json' } });
+                                    if (rp.ok) {
+                                        const ps = await rp.json();
+                                        document.getElementById('db-premium-status').innerHTML = statusBadge(ps.active, ps.lifetime);
+                                        document.getElementById('db-premium-tier').innerHTML = tierBadge(ps.tier ?? 0);
+                                        const remWrap = document.getElementById('db-premium-remaining-wrap');
+                                        const rem = document.getElementById('db-premium-remaining');
+                                        premActive = !!ps.active;
+                                        premLifetime = !!ps.lifetime;
+                                        if (ps.active && !ps.lifetime && typeof ps.active_seconds === 'number') {
+                                            premRemaining = parseInt(ps.active_seconds,10) || 0;
+                                            rem.textContent = fmtShort(premRemaining);
+                                            remWrap.classList.remove('hidden');
+                                        } else {
+                                            premRemaining = 0;
+                                            remWrap.classList.add('hidden');
+                                        }
+                                    }
+                                } catch (e) {}
                                 try {
                                     const res = await fetch('/bank/user-time', { headers: { 'Accept': 'application/json' } });
                                     if (!res.ok) throw new Error('failed');
@@ -133,6 +186,11 @@
                                     last = now;
                                     balEl.textContent = fmt(current);
                                     if (current < 3600) { alertEl.classList.remove('hidden'); } else { alertEl.classList.add('hidden'); }
+                                    if (premActive && !premLifetime && premRemaining > 0) {
+                                        premRemaining = Math.max(0, premRemaining - elapsed);
+                                        const rem = document.getElementById('db-premium-remaining');
+                                        if (rem) rem.textContent = fmtShort(premRemaining);
+                                    }
                                 }
                             }, 1000);
 
