@@ -23,6 +23,14 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Secure Horizon dashboard to admins only (when Horizon is installed)
+        if (class_exists(\Laravel\Horizon\Horizon::class)) {
+            \Laravel\Horizon\Horizon::auth(function ($request) {
+                $user = $request->user();
+                return $user && !empty($user->is_admin);
+            });
+        }
+
         User::created(function (User $user) {
             TimeAccount::firstOrCreate(
                 ['user_id' => $user->id],
