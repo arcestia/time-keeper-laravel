@@ -206,6 +206,16 @@ class JobsController extends Controller
 
             // Compute XP: 1 XP per 30 reward seconds, minimum 1
             $xp = max(1, intdiv($amount, 30));
+            // Apply premium XP multiplier if active
+            $prem = PremiumService::getOrCreate($user->id);
+            if (PremiumService::isActive($prem)) {
+                $tier = PremiumService::tierFor((int)$prem->premium_seconds_accumulated);
+                $benefits = PremiumService::benefitsForTier($tier);
+                $xpMult = (float)($benefits['xp_multiplier'] ?? 1.0);
+                if ($xpMult > 1.0) {
+                    $xp = max(1, (int) floor($xp * $xpMult));
+                }
+            }
             // Grant XP
             app(ProgressService::class)->addXp($user->id, $xp);
 

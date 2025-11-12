@@ -37,16 +37,19 @@ class PremiumService
         if ($tier <= 0) return [
             'cap_multiplier' => 1.0,
             'reward_multiplier' => 1.0,
+            'xp_multiplier' => 1.0,
             'store_discount_pct' => 0,
             'heals_per_week' => 0,
         ];
         // Linear scaling
         $capMin = 1.20; $capMax = 11.00; // +20% -> +1000%
         $rewardMin = 1.05; $rewardMax = 2.50; // +5% -> +150%
+        $xpMin = 1.05; $xpMax = 3.00; // +5% -> +200%
         $discMin = 1; $discMax = 30; // percent
         $steps = 19; $pos = ($tier - 1);
         $cap = $capMin + ($capMax - $capMin) * ($pos / $steps);
         $reward = $rewardMin + ($rewardMax - $rewardMin) * ($pos / $steps);
+        $xp = $xpMin + ($xpMax - $xpMin) * ($pos / $steps);
         $discount = (int)round($discMin + ($discMax - $discMin) * ($pos / $steps));
         $heals = 0;
         if ($tier >= 5) {
@@ -55,6 +58,7 @@ class PremiumService
         return [
             'cap_multiplier' => $cap,
             'reward_multiplier' => $reward,
+            'xp_multiplier' => $xp,
             'store_discount_pct' => $discount,
             'heals_per_week' => $heals,
         ];

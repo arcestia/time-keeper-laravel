@@ -37,7 +37,7 @@
             const btnStd = document.getElementById('jobs-standard');
             let jobsCache = [];
             let jobsFilter = 'all';
-            let rewardMult = 1.0; let premActive = false;
+            let rewardMult = 1.0; let xpMult = 1.0; let premActive = false;
             function setJobsFilter(f){
                 jobsFilter = f;
                 const set = (btn, active) => {
@@ -79,9 +79,11 @@
                         const energy = (j.energy_cost ?? 0);
                         const base = (parseInt(j.reward_seconds,10)||0);
                         const eff = premActive && rewardMult>1 ? Math.floor(base * rewardMult) : base;
-                        const xp = Math.max(1, Math.floor(eff / 30));
+                        let xp = Math.max(1, Math.floor(eff / 30));
                         const multText = premActive && rewardMult>1 ? (' • x' + rewardMult.toFixed(2)) : '';
-                        title.textContent = j.name + ' (+' + eff + 's' + multText + ', +' + xp + ' XP, -' + energy + '% energy)';
+                        const xpMultText = premActive && xpMult>1 ? (' • XP x' + xpMult.toFixed(2)) : '';
+                        if (premActive && xpMult>1) { xp = Math.max(1, Math.floor(xp * xpMult)); }
+                        title.textContent = j.name + ' (+' + eff + 's' + multText + xpMultText + ', +' + xp + ' XP, -' + energy + '% energy)';
                         const meta = document.createElement('div');
                         meta.className = 'text-xs text-gray-500 mt-0.5';
                         meta.textContent = 'Duration: ' + fmtHMS(j.duration_seconds) + ' • Cooldown: ' + fmtHMS(j.cooldown_seconds);
@@ -162,10 +164,19 @@
                         if (ps.ok) {
                             const d = await ps.json();
                             premActive = !!d.active;
-                            const b = d && d.benefits; rewardMult = (b && b.reward_multiplier) ? parseFloat(b.reward_multiplier) : 1.0;
+                            const b = d && d.benefits; 
+                            rewardMult = (b && b.reward_multiplier) ? parseFloat(b.reward_multiplier) : 1.0;
+                            xpMult = (b && b.xp_multiplier) ? parseFloat(b.xp_multiplier) : 1.0;
                             const bonus = document.getElementById('jobs-bonus');
-                            if (premActive && rewardMult>1) { bonus.textContent = 'Reward multiplier x' + rewardMult.toFixed(2); bonus.classList.remove('hidden'); }
-                            else { bonus.classList.add('hidden'); bonus.textContent=''; }
+                            if (premActive && (rewardMult>1 || xpMult>1)) { 
+                                const parts = [];
+                                if (rewardMult>1) parts.push('Rewards x' + rewardMult.toFixed(2));
+                                if (xpMult>1) parts.push('XP x' + xpMult.toFixed(2));
+                                bonus.textContent = parts.join(' • ');
+                                bonus.classList.remove('hidden'); 
+                            } else { 
+                                bonus.classList.add('hidden'); bonus.textContent=''; 
+                            }
                         }
                     } catch (_) {}
                     const res = await fetch('/api/jobs', { headers: { 'Accept': 'application/json' } });
