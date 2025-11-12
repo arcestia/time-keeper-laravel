@@ -16,12 +16,14 @@ class UserProgress extends Model
         'user_id',
         'level',
         'xp',
+        'total_xp',
         'next_xp',
     ];
 
     protected $casts = [
         'level' => 'integer',
         'xp' => 'integer',
+        'total_xp' => 'integer',
         'next_xp' => 'integer',
     ];
 

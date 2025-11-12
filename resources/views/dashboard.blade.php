@@ -53,8 +53,17 @@
                                 <div id="stats-status" class="text-sm text-gray-500"></div>
                             </div>
                         </div>
-
-                        
+                        <div class="p-4 rounded-xl border bg-white">
+                            <div class="text-lg font-semibold mb-2">Your Level</div>
+                            <div class="flex items-center justify-between">
+                                <div id="level-badge" class="text-2xl font-extrabold">Lv --</div>
+                                <div id="xp-label" class="text-sm text-gray-600">-- / -- XP</div>
+                            </div>
+                            <div class="mt-2 w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+                                <div id="xp-bar" class="h-2 bg-gradient-to-r from-sky-400 to-indigo-600" style="width:0%"></div>
+                            </div>
+                            <div id="xp-status" class="text-sm text-gray-500 mt-1"></div>
+                        </div>
                     </div>
                     <script>
                         (() => {
@@ -63,6 +72,10 @@
                             const statusEl = document.getElementById('dt-status');
                             const alertEl = document.getElementById('dt-alert');
                             const statsStatusEl = document.getElementById('stats-status');
+                            const lvlBadge = document.getElementById('level-badge');
+                            const xpLabel = document.getElementById('xp-label');
+                            const xpBar = document.getElementById('xp-bar');
+                            const xpStatus = document.getElementById('xp-status');
                             const bars = {
                                 energy: document.getElementById('stat-energy'),
                                 food: document.getElementById('stat-food'),
@@ -191,6 +204,22 @@
                                     statsStatusEl.textContent = '';
                                 } catch (e) {
                                     statsStatusEl.textContent = 'Unable to load stats';
+                                }
+                                try {
+                                    const rp2 = await fetch('/api/me/progress', { headers: { 'Accept': 'application/json' } });
+                                    if (!rp2.ok) throw new Error('failed');
+                                    const p = await rp2.json();
+                                    const level = parseInt(p.level ?? 1, 10);
+                                    const xp = parseInt(p.xp ?? 0, 10);
+                                    const next = Math.max(1, parseInt(p.next_xp ?? 1000, 10));
+                                    const rem = Math.max(0, parseInt(p.remaining ?? (next - xp), 10));
+                                    const pct = Math.max(0, Math.min(100, Math.round((xp / next) * 100)));
+                                    if (lvlBadge) lvlBadge.textContent = 'Lv ' + level;
+                                    if (xpLabel) xpLabel.textContent = xp.toLocaleString() + ' / ' + next.toLocaleString() + ' XP';
+                                    if (xpBar) xpBar.style.width = pct + '%';
+                                    if (xpStatus) xpStatus.textContent = rem.toLocaleString() + ' XP to next level';
+                                } catch (e) {
+                                    if (xpStatus) xpStatus.textContent = 'Unable to load progress';
                                 }
                                 
                             }

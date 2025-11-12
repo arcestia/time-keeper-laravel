@@ -17,7 +17,7 @@ class ProgressService
     {
         return UserProgress::firstOrCreate(
             ['user_id' => $userId],
-            ['level' => 1, 'xp' => 0, 'next_xp' => $this->nextXpForLevel(1)]
+            ['level' => 1, 'xp' => 0, 'total_xp' => 0, 'next_xp' => $this->nextXpForLevel(1)]
         );
     }
 
@@ -37,6 +37,7 @@ class ProgressService
                 $p->save();
             }
             $p->xp = (int) $p->xp + $amount;
+            $p->total_xp = (int) ($p->total_xp ?? 0) + $amount;
             while ($p->xp >= $p->next_xp) {
                 $p->xp -= $p->next_xp;
                 $p->level = (int) $p->level + 1;
