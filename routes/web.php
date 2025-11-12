@@ -87,8 +87,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/api/expeditions', [ExpeditionController::class, 'catalog'])->name('expeditions.catalog');
     Route::get('/api/expeditions/my', [ExpeditionController::class, 'my'])->name('expeditions.my');
     Route::post('/api/expeditions/buy/{id}', [ExpeditionController::class, 'buy'])->name('expeditions.buy');
+    Route::post('/api/expeditions/buy-level', [ExpeditionController::class, 'buyLevel'])->name('expeditions.buylevel');
     Route::post('/api/expeditions/start/{id}', [ExpeditionController::class, 'start'])->name('expeditions.start');
     Route::post('/api/expeditions/claim/{id}', [ExpeditionController::class, 'claim'])->name('expeditions.claim');
+    Route::post('/api/expeditions/claim-all', [ExpeditionController::class, 'claimAll'])->name('expeditions.claim_all');
 
     // Time Keeper stats
     Route::get('/keeper', [TimeKeeperController::class, 'page'])->name('keeper.page');

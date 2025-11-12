@@ -40,6 +40,8 @@ class PremiumService
             'xp_multiplier' => 1.0,
             'store_discount_pct' => 0,
             'heals_per_week' => 0,
+            'expedition_extra_slots' => 0,
+            'expedition_total_slots' => 1,
         ];
         // Linear scaling
         $capMin = 1.20; $capMax = 11.00; // +20% -> +1000%
@@ -55,12 +57,23 @@ class PremiumService
         if ($tier >= 5) {
             if ($tier >= 17) $heals = 5; else if ($tier >= 14) $heals = 4; else if ($tier >= 11) $heals = 3; else if ($tier >= 8) $heals = 2; else $heals = 1;
         }
+        // Expedition extra slots: from tier 5 -> +1, up to tier 20 -> +10
+        $extraSlots = 0;
+        if ($tier >= 5) {
+            $slotsMin = 1; $slotsMax = 10; // extra slots
+            $slotSteps = 15; // tiers 5..20 inclusive => 16 tiers => 15 steps
+            $slotPos = $tier - 5;
+            $extraSlots = (int) floor($slotsMin + ($slotsMax - $slotsMin) * ($slotPos / $slotSteps));
+            $extraSlots = max($slotsMin, min($slotsMax, $extraSlots));
+        }
         return [
-            'cap_multiplier' => $cap,
-            'reward_multiplier' => $reward,
-            'xp_multiplier' => $xp,
-            'store_discount_pct' => $discount,
-            'heals_per_week' => $heals,
+            'cap_multiplier' => (float)$cap,
+            'reward_multiplier' => (float)$reward,
+            'xp_multiplier' => (float)$xp,
+            'store_discount_pct' => (int)$discount,
+            'heals_per_week' => (int)$heals,
+            'expedition_extra_slots' => (int)$extraSlots,
+            'expedition_total_slots' => (int)(1 + $extraSlots),
         ];
     }
 

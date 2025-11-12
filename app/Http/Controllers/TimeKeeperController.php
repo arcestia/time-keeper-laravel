@@ -49,6 +49,15 @@ class TimeKeeperController extends Controller
         $reserve = TimeKeeperReserve::query()->first();
         $reserveSeconds = (int) optional($reserve)->balance_seconds;
 
+        // Items in circulation
+        $invTotal = (int) \App\Models\UserInventoryItem::query()->sum('quantity');
+        $stoTotal = (int) \App\Models\UserStorageItem::query()->sum('quantity');
+
+        // Expeditions counts
+        $expPending = (int) \App\Models\UserExpedition::where('status','pending')->count();
+        $expActive = (int) \App\Models\UserExpedition::where('status','active')->count();
+        $expCompleted = (int) \App\Models\UserExpedition::whereIn('status',['completed','claimed'])->count();
+
         return response()->json([
             'total_users' => $totalUsers,
             'active_users' => $activeWalletUsers,
@@ -64,6 +73,11 @@ class TimeKeeperController extends Controller
             'avg_bank_formatted' => TimeUnits::compactColon($avgBank),
             'reserve_seconds' => $reserveSeconds,
             'reserve_formatted' => TimeUnits::compactColon($reserveSeconds),
+            'items_inventory_total' => $invTotal,
+            'items_storage_total' => $stoTotal,
+            'expeditions_pending' => $expPending,
+            'expeditions_active' => $expActive,
+            'expeditions_completed' => $expCompleted,
         ]);
     }
 

@@ -23,6 +23,64 @@ class ExpeditionController extends Controller
         return view('expeditions.index');
     }
 
+    public function claimAll(): JsonResponse
+    {
+        $user = Auth::user();
+        $now = now();
+        $claimed = 0; $totalXp = 0; $lootAgg = [];
+        // Process each finished active expedition in its own transaction to reduce lock contention
+        $toProcess = UserExpedition::where(['user_id'=>$user->id,'status'=>'active'])
+            ->whereNotNull('ends_at')
+            ->where('ends_at','<=',$now)
+            ->orderBy('id')
+            ->limit(100)
+            ->get();
+        foreach ($toProcess as $ueRow) {
+            DB::transaction(function() use($user,$ueRow,$now,&$claimed,&$totalXp,&$lootAgg) {
+                $ue = UserExpedition::where(['id'=>$ueRow->id,'user_id'=>$user->id])->lockForUpdate()->first();
+                if (!$ue || $ue->status !== 'active' || !$ue->ends_at || $now->lt($ue->ends_at)) { return; }
+                $ue->status = 'completed';
+                $ue->save();
+                // XP with premium multiplier
+                $xp = (int) $ue->base_xp;
+                $prem = PremiumService::getOrCreate($user->id);
+                if (PremiumService::isActive($prem)) {
+                    $tier = PremiumService::tierFor((int)$prem->premium_seconds_accumulated);
+                    $benefits = PremiumService::benefitsForTier($tier);
+                    $mult = (float)($benefits['xp_multiplier'] ?? 1.0);
+                    if ($mult > 1.0) { $xp = max(1, (int) floor($xp * $mult)); }
+                }
+                app(ProgressService::class)->addXp($user->id, $xp);
+                $totalXp += $xp; $claimed++;
+                // deplete food/water
+                $hours = max(1, (int) ceil(((int)$ue->duration_seconds)/3600));
+                $deplete = min(100, $hours);
+                $stats = UserStats::where('user_id',$user->id)->lockForUpdate()->first();
+                if (!$stats) { $stats = UserStats::create(['user_id'=>$user->id,'energy'=>100,'food'=>100,'water'=>100,'leisure'=>100,'health'=>100]); }
+                $stats->food = max(0, (int)$stats->food - $deplete);
+                $stats->water = max(0, (int)$stats->water - $deplete);
+                $stats->save();
+                // loot
+                $loot = [];
+                $items = StoreItem::where('is_active', true)->inRandomOrder()->limit(5)->get();
+                $count = random_int(1, min(3, max(1, $items->count())));
+                for ($i=0; $i<$count; $i++) {
+                    $si = $items[$i]; if (!$si) break;
+                    $q = random_int(1, 5);
+                    $loot[] = ['key'=>$si->key,'name'=>$si->name,'qty'=>$q];
+                    $sto = UserStorageItem::where(['user_id'=>$user->id,'store_item_id'=>$si->id])->lockForUpdate()->first();
+                    if (!$sto) { $sto = UserStorageItem::create(['user_id'=>$user->id,'store_item_id'=>$si->id,'quantity'=>0]); }
+                    $sto->quantity = (int)$sto->quantity + $q; $sto->save();
+                    // aggregate
+                    if (!isset($lootAgg[$si->key])) { $lootAgg[$si->key] = ['key'=>$si->key,'name'=>$si->name,'qty'=>0]; }
+                    $lootAgg[$si->key]['qty'] += $q;
+                }
+                $ue->loot = $loot; $ue->status = 'claimed'; $ue->save();
+            });
+        }
+        return response()->json(['ok'=>true,'claimed'=>$claimed,'total_xp'=>$totalXp,'loot'=>array_values($lootAgg)]);
+    }
+
     public function catalog(): JsonResponse
     {
         $level = (int) request('level', 0);
@@ -92,9 +150,10 @@ class ExpeditionController extends Controller
         $now = now();
         $source = request()->input('source','wallet');
         if (!in_array($source,['wallet','bank'],true)) $source = 'wallet';
+        $qty = max(1, min(50, (int) request()->input('qty', 1)));
 
-        $result = DB::transaction(function() use($user,$exp,$source,$now){
-            $price = (int)$exp->cost_seconds;
+        $result = DB::transaction(function() use($user,$exp,$source,$now,$level,$qty){
+            $price = (int)$exp->cost_seconds * $qty;
             $wallet = null; $bank = null;
             if ($source==='wallet'){
                 $wallet = UserTimeWallet::where('user_id',$user->id)->lockForUpdate()->first();
@@ -109,21 +168,26 @@ class ExpeditionController extends Controller
                 }
                 $bank->base_balance_seconds = (int)$bank->base_balance_seconds - $price; $bank->save();
             }
-            $dur = random_int((int)$exp->min_duration_seconds, (int)$exp->max_duration_seconds);
-            $baseXp = max(1, (int) floor($dur / 30));
-            $ue = UserExpedition::create([
-                'user_id' => $user->id,
-                'expedition_id' => $exp->id,
-                'status' => 'pending',
-                'purchased_at' => $now,
-                'duration_seconds' => $dur,
-                'base_xp' => $baseXp,
-            ]);
-            return [$ue,$wallet,$bank,$exp];
+            $created = [];
+            for ($i=0; $i<$qty; $i++) {
+                $chosen = Expedition::where('level',$level)->inRandomOrder()->firstOrFail();
+                $dur = random_int((int)$chosen->min_duration_seconds, (int)$chosen->max_duration_seconds);
+                $baseXp = max(1, (int) floor($dur / 30));
+                $ue = UserExpedition::create([
+                    'user_id' => $user->id,
+                    'expedition_id' => $chosen->id,
+                    'status' => 'pending',
+                    'purchased_at' => $now,
+                    'duration_seconds' => $dur,
+                    'base_xp' => $baseXp,
+                ]);
+                $created[] = $ue;
+            }
+            return [$created,$wallet,$bank,$qty,$level];
         });
-        [$ue,$wallet,$bank,$exp] = $result;
-        Flasher::addSuccess('Purchased expedition (random L'.$exp->level.'): '.$exp->name);
-        return response()->json(['ok'=>true,'expedition'=>$ue]);
+        [$created,$wallet,$bank,$qty,$level] = $result;
+        Flasher::addSuccess('Purchased '.$qty.' expedition(s) at level '.$level);
+        return response()->json(['ok'=>true,'count'=>$qty,'expeditions'=>$created]);
     }
 
     public function start(int $userExpeditionId): JsonResponse
@@ -131,11 +195,21 @@ class ExpeditionController extends Controller
         $user = Auth::user();
         $now = now();
         return DB::transaction(function() use($user,$userExpeditionId,$now){
-            // enforce one active at a time
-            $active = UserExpedition::where(['user_id'=>$user->id,'status'=>'active'])->lockForUpdate()->first();
-            if ($active) { abort(422,'You already have an active expedition'); }
-            $ue = UserExpedition::where(['id'=>$userExpeditionId,'user_id'=>$user->id])->lockForUpdate()->firstOrFail();
-            if ($ue->status !== 'pending') { abort(422,'Expedition is not pending'); }
+            // enforce premium-based active slots
+            $prem = PremiumService::getOrCreate($user->id);
+            $allowed = 1;
+            if (PremiumService::isActive($prem)) {
+                $tier = PremiumService::tierFor((int)$prem->premium_seconds_accumulated);
+                $benefits = PremiumService::benefitsForTier($tier);
+                $allowed = max(1, (int)($benefits['expedition_total_slots'] ?? 1));
+            }
+            $activeCount = (int) UserExpedition::where(['user_id'=>$user->id,'status'=>'active'])->lockForUpdate()->count();
+            if ($activeCount >= $allowed) {
+                return response()->json(['ok'=>false,'message'=>"Active expeditions limit reached (${activeCount}/${allowed}). Upgrade premium tier or wait until one finishes."], 422);
+            }
+            $ue = UserExpedition::where(['id'=>$userExpeditionId,'user_id'=>$user->id])->lockForUpdate()->first();
+            if (!$ue) { return response()->json(['ok'=>false,'message'=>'Expedition not found'], 404); }
+            if ($ue->status !== 'pending') { return response()->json(['ok'=>false,'message'=>'Expedition is not pending'], 422); }
             $exp = Expedition::findOrFail($ue->expedition_id);
             $ue->status = 'active';
             $ue->started_at = $now;
@@ -159,9 +233,10 @@ class ExpeditionController extends Controller
         $user = Auth::user();
         $now = now();
         return DB::transaction(function() use($user,$userExpeditionId,$now){
-            $ue = UserExpedition::where(['id'=>$userExpeditionId,'user_id'=>$user->id])->lockForUpdate()->firstOrFail();
-            if ($ue->status !== 'active') { abort(422,'Expedition is not active'); }
-            if (!$ue->ends_at || $now->lt($ue->ends_at)) { abort(422,'Expedition not finished yet'); }
+            $ue = UserExpedition::where(['id'=>$userExpeditionId,'user_id'=>$user->id])->lockForUpdate()->first();
+            if (!$ue) { return response()->json(['ok'=>false,'message'=>'Expedition not found'], 404); }
+            if ($ue->status !== 'active') { return response()->json(['ok'=>false,'message'=>'Expedition is not active'], 422); }
+            if (!$ue->ends_at || $now->lt($ue->ends_at)) { return response()->json(['ok'=>false,'message'=>'Expedition not finished yet'], 422); }
             $ue->status = 'completed';
             $ue->save();
             // apply XP with premium multiplier

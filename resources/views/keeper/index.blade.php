@@ -67,6 +67,10 @@
                             <div id="st-reserve" class="text-xl font-mono">-</div>
                             <div id="st-reserve-seconds" class="text-xs text-gray-500">-</div>
                         </div>
+                        <div class="p-4 border rounded">
+                            <div class="text-sm text-gray-600">Items in Circulation</div>
+                            <div class="text-xl"><span id="st-items-inv">-</span> inventory • <span id="st-items-sto">-</span> storage</div>
+                        </div>
                     </div>
 
                     <div id="tab-charts" class="mt-8 hidden">
@@ -155,6 +159,14 @@
                     el('st-avg-bank').textContent = d.avg_bank_formatted;
                     el('st-reserve').textContent = d.reserve_formatted;
                     el('st-reserve-seconds').textContent = d.reserve_seconds + ' seconds';
+                    // Items & Expeditions
+                    el('st-items-inv').textContent = (d.items_inventory_total||0).toLocaleString();
+                    el('st-items-sto').textContent = (d.items_storage_total||0).toLocaleString();
+                    // Expeditions card - inject if not present
+                    ensureExpeditionsCard();
+                    el('st-exp-pend').textContent = (d.expeditions_pending||0).toLocaleString();
+                    el('st-exp-act').textContent = (d.expeditions_active||0).toLocaleString();
+                    el('st-exp-comp').textContent = (d.expeditions_completed||0).toLocaleString();
                     statusEl.textContent = '';
                 } catch (e) {
                     statusEl.textContent = 'Unable to load stats';
@@ -173,6 +185,14 @@
             setInterval(refresh, 60000);
 
             
+            function ensureExpeditionsCard(){
+                if (document.getElementById('st-exp-card')) return;
+                const host = document.getElementById('tab-summary-extra-3');
+                const wrap = document.createElement('div'); wrap.className='p-4 border rounded'; wrap.id='st-exp-card';
+                const t = document.createElement('div'); t.className='text-sm text-gray-600'; t.textContent='Expeditions (Totals)';
+                const v = document.createElement('div'); v.className='text-xl'; v.innerHTML = '<span id="st-exp-pend">-</span> pending • <span id="st-exp-act">-</span> active • <span id="st-exp-comp">-</span> completed';
+                wrap.appendChild(t); wrap.appendChild(v); host.appendChild(wrap);
+            }
             function mkChart(ctx, label, data, color){
                 return new Chart(ctx, {
                     type: 'line',
