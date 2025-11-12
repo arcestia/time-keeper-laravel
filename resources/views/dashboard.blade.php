@@ -12,8 +12,17 @@
                     <div class="p-6 rounded-xl border bg-gradient-to-r from-indigo-50 to-fuchsia-50">
                         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                             <div>
-                                <div class="text-xl font-semibold">Welcome, {{ Auth::user()->name }} <span id="db-premium-stars-inline" class="align-middle"></span></div>
+                                <div class="text-xl font-semibold">Welcome, {{ Auth::user()->name }} <span id="db-premium-stars-inline" class="align-middle"></span> <span id="db-level-inline" class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700">Lv --</span></div>
                                 <div class="mt-1 text-sm text-gray-700">Premium: <span id="db-premium-status">Loading...</span> • Tier <span id="db-premium-tier">-</span> <span id="db-premium-remaining-wrap" class="hidden">• Remaining <span id="db-premium-remaining" class="font-medium"></span></span></div>
+                                <div class="mt-2">
+                                    <div class="flex items-center justify-between text-xs text-gray-600">
+                                        <div id="db-xp-label">-- / -- XP</div>
+                                        <div id="db-xp-remaining">-- XP to next</div>
+                                    </div>
+                                    <div class="mt-1 w-full bg-gray-200 rounded-full h-1 overflow-hidden">
+                                        <div id="db-xp-bar" class="h-1 bg-gradient-to-r from-sky-400 to-indigo-600" style="width:0%"></div>
+                                    </div>
+                                </div>
                             </div>
                             
                         </div>
@@ -53,17 +62,7 @@
                                 <div id="stats-status" class="text-sm text-gray-500"></div>
                             </div>
                         </div>
-                        <div class="p-4 rounded-xl border bg-white">
-                            <div class="text-lg font-semibold mb-2">Your Level</div>
-                            <div class="flex items-center justify-between">
-                                <div id="level-badge" class="text-2xl font-extrabold">Lv --</div>
-                                <div id="xp-label" class="text-sm text-gray-600">-- / -- XP</div>
-                            </div>
-                            <div class="mt-2 w-full bg-gray-200 rounded-full h-2 overflow-hidden">
-                                <div id="xp-bar" class="h-2 bg-gradient-to-r from-sky-400 to-indigo-600" style="width:0%"></div>
-                            </div>
-                            <div id="xp-status" class="text-sm text-gray-500 mt-1"></div>
-                        </div>
+                        
                     </div>
                     <script>
                         (() => {
@@ -72,10 +71,10 @@
                             const statusEl = document.getElementById('dt-status');
                             const alertEl = document.getElementById('dt-alert');
                             const statsStatusEl = document.getElementById('stats-status');
-                            const lvlBadge = document.getElementById('level-badge');
-                            const xpLabel = document.getElementById('xp-label');
-                            const xpBar = document.getElementById('xp-bar');
-                            const xpStatus = document.getElementById('xp-status');
+                            const lvlInline = document.getElementById('db-level-inline');
+                            const xpInlineLabel = document.getElementById('db-xp-label');
+                            const xpInlineRemain = document.getElementById('db-xp-remaining');
+                            const xpInlineBar = document.getElementById('db-xp-bar');
                             const bars = {
                                 energy: document.getElementById('stat-energy'),
                                 food: document.getElementById('stat-food'),
@@ -214,13 +213,11 @@
                                     const next = Math.max(1, parseInt(p.next_xp ?? 1000, 10));
                                     const rem = Math.max(0, parseInt(p.remaining ?? (next - xp), 10));
                                     const pct = Math.max(0, Math.min(100, Math.round((xp / next) * 100)));
-                                    if (lvlBadge) lvlBadge.textContent = 'Lv ' + level;
-                                    if (xpLabel) xpLabel.textContent = xp.toLocaleString() + ' / ' + next.toLocaleString() + ' XP';
-                                    if (xpBar) xpBar.style.width = pct + '%';
-                                    if (xpStatus) xpStatus.textContent = rem.toLocaleString() + ' XP to next level';
-                                } catch (e) {
-                                    if (xpStatus) xpStatus.textContent = 'Unable to load progress';
-                                }
+                                    if (lvlInline) lvlInline.textContent = 'Lv ' + level;
+                                    if (xpInlineLabel) xpInlineLabel.textContent = xp.toLocaleString() + ' / ' + next.toLocaleString() + ' XP';
+                                    if (xpInlineRemain) xpInlineRemain.textContent = rem.toLocaleString() + ' XP to next';
+                                    if (xpInlineBar) xpInlineBar.style.width = pct + '%';
+                                } catch (e) {}
                                 
                             }
 
