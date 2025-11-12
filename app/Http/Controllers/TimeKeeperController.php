@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\DB;
 use App\Models\TimeKeeperReserve;
 use Illuminate\Support\Facades\Auth;
 use Flasher\Laravel\Facade\Flasher;
+use App\Models\TimeSnapshot;
 
 class TimeKeeperController extends Controller
 {
@@ -63,6 +64,24 @@ class TimeKeeperController extends Controller
             'avg_bank_formatted' => TimeUnits::compactColon($avgBank),
             'reserve_seconds' => $reserveSeconds,
             'reserve_formatted' => TimeUnits::compactColon($reserveSeconds),
+        ]);
+    }
+
+    public function snapshots(): JsonResponse
+    {
+        $limit = max(30, (int) request('limit', 360));
+        $rows = TimeSnapshot::query()
+            ->orderByDesc('captured_at')
+            ->limit($limit)
+            ->get(['captured_at','reserve_seconds','total_wallet_seconds','total_bank_seconds'])
+            ->reverse()
+            ->values();
+
+        return response()->json([
+            'labels' => $rows->pluck('captured_at')->map(fn($d) => $d->toDateTimeString())->all(),
+            'reserve' => $rows->pluck('reserve_seconds')->all(),
+            'wallet' => $rows->pluck('total_wallet_seconds')->all(),
+            'bank' => $rows->pluck('total_bank_seconds')->all(),
         ]);
     }
 

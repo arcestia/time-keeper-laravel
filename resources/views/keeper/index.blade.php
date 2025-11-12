@@ -62,7 +62,23 @@
                         </div>
                     </div>
 
-                    
+                    <div class="mt-8">
+                        <div class="text-lg font-semibold mb-2">Time Series</div>
+                        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                            <div class="p-4 border rounded">
+                                <div class="text-sm text-gray-600 mb-2">Reserve Balance</div>
+                                <canvas id="chart-reserve" height="140"></canvas>
+                            </div>
+                            <div class="p-4 border rounded">
+                                <div class="text-sm text-gray-600 mb-2">Total Wallets (Display)</div>
+                                <canvas id="chart-wallet" height="140"></canvas>
+                            </div>
+                            <div class="p-4 border rounded">
+                                <div class="text-sm text-gray-600 mb-2">Total Banks</div>
+                                <canvas id="chart-bank" height="140"></canvas>
+                            </div>
+                        </div>
+                    </div>
 
                     <div id="st-status" class="mt-4 text-sm text-gray-500"></div>
                 </div>
@@ -70,10 +86,12 @@
         </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script>
         (() => {
             const el = id => document.getElementById(id);
             const statusEl = el('st-status');
+            let charts = { reserve: null, wallet: null, bank: null };
 
             async function refresh() {
                 statusEl.textContent = 'Loading...';
@@ -97,12 +115,66 @@
                 } catch (e) {
                     statusEl.textContent = 'Unable to load stats';
                 }
+                try {
+                    const r2 = await fetch('/keeper/snapshots?limit=360', { headers: { 'Accept': 'application/json' } });
+                    if (!r2.ok) throw new Error('failed');
+                    const s = await r2.json();
+                    renderCharts(s);
+                } catch (e) {
+                    // ignore chart errors in UI
+                }
             }
 
             refresh();
             setInterval(refresh, 10000);
 
             
+            function mkChart(ctx, label, data, color){
+                return new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: data.labels,
+                        datasets: [{
+                            label,
+                            data: data.series,
+                            borderColor: color,
+                            backgroundColor: color,
+                            fill: false,
+                            tension: 0.2,
+                            pointRadius: 0,
+                            borderWidth: 2,
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            x: { display: false },
+                            y: { ticks: { callback: v => v.toLocaleString() } }
+                        },
+                        plugins: { legend: { display: false } }
+                    }
+                });
+            }
+
+            function renderCharts(s){
+                const labels = s.labels || [];
+                const reserve = s.reserve || [];
+                const wallet = s.wallet || [];
+                const bank = s.bank || [];
+                const rCtx = el('chart-reserve').getContext('2d');
+                const wCtx = el('chart-wallet').getContext('2d');
+                const bCtx = el('chart-bank').getContext('2d');
+                const rData = { labels, series: reserve };
+                const wData = { labels, series: wallet };
+                const bData = { labels, series: bank };
+                if (charts.reserve) charts.reserve.destroy();
+                if (charts.wallet) charts.wallet.destroy();
+                if (charts.bank) charts.bank.destroy();
+                charts.reserve = mkChart(rCtx, 'Reserve', rData, '#8b5cf6');
+                charts.wallet = mkChart(wCtx, 'Wallets', wData, '#10b981');
+                charts.bank = mkChart(bCtx, 'Banks', bData, '#3b82f6');
+            }
         })();
     </script>
 </x-app-layout>

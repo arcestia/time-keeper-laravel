@@ -14,3 +14,8 @@ Schedule::command('time:settle')
     ->everyMinute()
     ->withoutOverlapping();
 
+// Record a snapshot every minute for charts
+Schedule::command('time:snapshot')
+    ->everyMinute()
+    ->withoutOverlapping();
+
