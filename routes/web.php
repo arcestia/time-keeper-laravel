@@ -35,6 +35,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/api/me/stats', [StatsController::class, 'me'])->name('stats.me');
     Route::patch('/api/me/stats', [StatsController::class, 'updateMe'])->name('stats.updateMe');
 
+    // Progress (levels & XP)
+    Route::get('/api/me/progress', [\App\Http\Controllers\ProgressController::class, 'me'])->name('progress.me');
+    Route::post('/api/me/xp/add', [\App\Http\Controllers\ProgressController::class, 'addXp'])->name('progress.addXp');
+
     // Admin
     Route::get('/admin', [\App\Http\Controllers\AdminController::class, 'page'])->name('admin.page');
     Route::get('/admin/users', [\App\Http\Controllers\AdminController::class, 'usersSearch'])->name('admin.users.search');
