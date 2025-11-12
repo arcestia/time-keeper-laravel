@@ -6,6 +6,7 @@ use App\Http\Controllers\TimeKeeperController;
 use App\Http\Controllers\StatsController;
 use App\Http\Controllers\JobsController;
 use App\Http\Controllers\StoreController;
+use App\Http\Controllers\InventoryController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -70,6 +71,15 @@ Route::middleware('auth')->group(function () {
     Route::post('/api/premium/heal', [\App\Http\Controllers\PremiumController::class, 'heal'])->name('premium.heal');
     Route::get('/api/store/balances', [StoreController::class, 'balances'])->name('store.balances');
     Route::post('/api/store/buy/{key}', [StoreController::class, 'buy'])->name('store.buy');
+
+    // Inventory Page
+    Route::get('/inventory', [InventoryController::class, 'page'])->name('inventory.page');
+
+    // Inventory APIs
+    Route::get('/api/inventory', [InventoryController::class, 'list'])->name('inventory.list');
+    Route::post('/api/inventory/consume', [InventoryController::class, 'consume'])->name('inventory.consume');
+    Route::post('/api/inventory/move-to-storage', [InventoryController::class, 'moveToStorage'])->name('inventory.move_to_storage');
+    Route::post('/api/inventory/move-to-inventory', [InventoryController::class, 'moveToInventory'])->name('inventory.move_to_inventory');
 
     // Time Keeper stats
     Route::get('/keeper', [TimeKeeperController::class, 'page'])->name('keeper.page');

@@ -69,6 +69,17 @@ class StoreController extends Controller
                 }
             }
             $price = $pricePer * $qty;
+
+            // Enforce GLOBAL inventory capacity pre-check (no overflow into storage)
+            $INV_MAX = 20000;
+            // lock all user's inventory rows by summing within transaction
+            $invTotal = (int) \App\Models\UserInventoryItem::query()->where('user_id',$user->id)->lockForUpdate()->sum('quantity');
+            if ($invTotal + $qty > $INV_MAX) {
+                Flasher::addError('Inventory capacity reached (global max 20,000). Reduce quantity.');
+                session()->flash('error', 'Inventory capacity reached (global max 20,000).');
+                abort(422, 'Inventory capacity reached');
+            }
+            $inv = \App\Models\UserInventoryItem::query()->where(['user_id'=>$user->id,'store_item_id'=>$lockedItem->id])->lockForUpdate()->first();
             $paidFrom = $source;
             $wallet = null;
             $bank = null;
@@ -110,47 +121,30 @@ class StoreController extends Controller
             $storeBalance->balance_seconds = (int)$storeBalance->balance_seconds + $price;
             $storeBalance->save();
 
-            $stats = UserStats::query()->where('user_id', $user->id)->lockForUpdate()->first();
-            if (!$stats) {
-                $stats = UserStats::create(['user_id' => $user->id, 'energy' => 100, 'food' => 100, 'water' => 100, 'leisure' => 100, 'health' => 100]);
-            }
-            // Premium stats cap multiplier
-            $capMult = 1.0;
-            if (PremiumService::isActive($prem)) {
-                $tier = PremiumService::tierFor((int)$prem->premium_seconds_accumulated);
-                $benefits = PremiumService::benefitsForTier($tier);
-                $capMult = (float)($benefits['cap_multiplier'] ?? 1.0);
-            }
-            $cap = (int) floor(100 * $capMult);
-            $stats->food = min($cap, (int)$stats->food + ((int)$lockedItem->restore_food * $qty));
-            $stats->water = min($cap, (int)$stats->water + ((int)$lockedItem->restore_water * $qty));
-            $stats->energy = min($cap, (int)$stats->energy + ((int)$lockedItem->restore_energy * $qty));
-            $stats->save();
+            // Add items to inventory (no immediate effects)
+            if (!$inv) { $inv = \App\Models\UserInventoryItem::create(['user_id'=>$user->id,'store_item_id'=>$lockedItem->id,'quantity'=>0]); }
+            $inv->quantity = (int)$inv->quantity + $qty; // safe due to global pre-check
+            $added = $qty;
+            $inv->save();
 
             // Decrement stock
             $lockedItem->quantity = max(0, (int)$lockedItem->quantity - $qty);
             $lockedItem->save();
 
-            return [$wallet, $bank, $stats, $lockedItem, $paidFrom, $price, $qty];
+            return [$wallet, $bank, $lockedItem, $paidFrom, $price, $qty, $added];
         });
 
-        [$wallet, $bank, $stats, $lockedItem, $paidFrom, $price, $qty] = $result;
-        Flasher::addSuccess('Purchased ' . $qty . ' x ' . $item->name . ' via ' . $paidFrom);
-        session()->flash('success', 'Purchased ' . $qty . ' x ' . $item->name . ' via ' . $paidFrom);
+        [$wallet, $bank, $lockedItem, $paidFrom, $price, $qty, $added] = $result;
+        Flasher::addSuccess('Purchased ' . $qty . ' x ' . $item->name . ' • Added to inventory: ' . $added);
+        session()->flash('success', 'Purchased ' . $qty . ' x ' . $item->name . ' • Added to inventory: ' . $added);
         return response()->json([
             'ok' => true,
             'paid_from' => $paidFrom,
             'price_seconds' => (int)$price,
             'qty' => (int)$qty,
+            'added_to_inventory' => (int)$added,
             'wallet_seconds' => (int)$wallet->available_seconds,
             'bank_seconds' => $bank ? (int)$bank->base_balance_seconds : null,
-            'stats' => [
-                'energy' => (int)$stats->energy,
-                'food' => (int)$stats->food,
-                'water' => (int)$stats->water,
-                'leisure' => (int)$stats->leisure,
-                'health' => (int)$stats->health,
-            ],
             'remaining_quantity' => (int)($lockedItem->quantity ?? 0),
         ]);
     }

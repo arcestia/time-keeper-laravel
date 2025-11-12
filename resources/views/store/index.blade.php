@@ -23,6 +23,7 @@
                             </div>
                         </div>
                     </div>
+                    <div class="mt-2 text-xs text-gray-600">Purchases are added to your Inventory. Manage and consume items on the <a href="/inventory" class="text-indigo-600 hover:underline">Inventory</a> page.</div>
                     <div id="st-status" class="mt-2 text-sm text-gray-500"></div>
                     <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4" id="st-list"></div>
                 </div>
@@ -185,7 +186,7 @@
                         });
                         renderFlashesFromResponse(res);
                         if (!res.ok) throw new Error();
-                        status.textContent = 'Purchased ' + item.name;
+                        status.textContent = 'Purchased ' + item.name + ' • added to Inventory (see Inventory page to use)';
                         await refresh();
                         await refreshBalances();
                     } catch (e) {
