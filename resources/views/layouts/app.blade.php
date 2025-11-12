@@ -33,6 +33,7 @@
             </main>
         </div>
         <script src="/vendor/flasher/flasher.min.js"></script>
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
         <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
         @flasher_render
         <script>

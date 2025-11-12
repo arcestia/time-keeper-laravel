@@ -116,4 +116,17 @@ class PremiumService
             $p->save();
         }
     }
+
+    // Returns integer percent cap for stats (e.g., 100 for non-premium, up to 1100 for T20)
+    public static function statsCapPercentForUser(int $userId): int
+    {
+        $p = self::getOrCreate($userId);
+        $mult = 1.0;
+        if (self::isActive($p)) {
+            $tier = self::tierFor((int)$p->premium_seconds_accumulated);
+            $benefits = self::benefitsForTier($tier);
+            $mult = (float)($benefits['cap_multiplier'] ?? 1.0);
+        }
+        return max(100, (int) floor(100 * $mult));
+    }
 }

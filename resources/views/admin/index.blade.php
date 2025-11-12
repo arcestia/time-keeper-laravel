@@ -75,10 +75,14 @@
                             const sliders = Object.fromEntries(fields.map(k => [k, document.getElementById(k)]));
                             const vals = Object.fromEntries(fields.map(k => [k, document.getElementById('v-'+k)]));
                             let currentUserId = null;
+                            let currentCap = 100;
+
+                            function tierStarColor(t){ if (t>=20) return 'text-fuchsia-500'; if (t>=15) return 'text-sky-500'; if (t>=10) return 'text-amber-500'; if (t>=5) return 'text-slate-500'; if (t>=1) return 'text-orange-500'; return 'text-gray-300'; }
 
                             function setVals(data) {
                                 for (const k of fields) {
-                                    const v = Math.max(0, Math.min(100, parseInt(data[k] ?? 0, 10)));
+                                    sliders[k].max = String(currentCap);
+                                    const v = Math.max(0, Math.min(currentCap, parseInt(data[k] ?? 0, 10)));
                                     sliders[k].value = v;
                                     vals[k].textContent = v;
                                 }
@@ -98,10 +102,25 @@
                                         results.innerHTML = '<li class="p-3 text-sm text-gray-500">No results</li>';
                                         return;
                                     }
-                                    for (const u of list) {
+                                    // Fetch minimal premium tier for each user to show star
+                                    const withPremium = await Promise.all(list.map(async (u) => {
+                                        try {
+                                            const r = await fetch('/admin/users/' + u.id + '/stats', { headers: { 'Accept': 'application/json' } });
+                                            if (!r.ok) throw new Error();
+                                            const d = await r.json();
+                                            const tier = (d && d.premium && d.premium.tier) || 0;
+                                            return { ...u, tier };
+                                        } catch (_) { return { ...u, tier: 0 }; }
+                                    }));
+                                    for (const u of withPremium) {
                                         const li = document.createElement('li');
-                                        li.className = 'p-3 hover:bg-gray-50 cursor-pointer';
-                                        li.textContent = u.username + ' (' + u.email + ')';
+                                        li.className = 'p-3 hover:bg-gray-50 cursor-pointer flex items-center gap-2';
+                                        const star = document.createElement('i');
+                                        star.className = 'fa-solid fa-star ' + tierStarColor(u.tier);
+                                        const label = document.createElement('span');
+                                        label.textContent = u.username;
+                                        li.appendChild(label);
+                                        li.appendChild(star);
                                         li.addEventListener('click', () => loadUser(u.id));
                                         results.appendChild(li);
                                     }
@@ -118,7 +137,10 @@
                                     currentUserId = data.user.id;
                                     userInfo.classList.add('hidden');
                                     form.classList.remove('hidden');
-                                    userHead.textContent = data.user.username + ' (' + data.user.email + ')';
+                                    currentCap = Math.max(100, parseInt((data.premium && data.premium.cap_percent) || 100, 10));
+                                    const tier = (data.premium && data.premium.tier) || 0;
+                                    const starCls = tierStarColor(tier);
+                                    userHead.innerHTML = `${data.user.username} <i class=\"fa-solid fa-star ${starCls}\"></i>`;
                                     setVals(data.stats);
                                     status.textContent = '';
                                 } catch (e) {

@@ -9,47 +9,51 @@
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
             <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                 <div class="p-6 text-gray-900">
-                    <div class="p-4 border rounded-lg">
-                        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                            <div class="text-lg font-semibold">Welcome, {{ Auth::user()->name }}</div>
-                            <div class="text-sm text-gray-600">Premium: <span id="db-premium-status">Loading...</span> • Tier <span id="db-premium-tier">-</span> <span id="db-premium-remaining-wrap" class="hidden">• Remaining <span id="db-premium-remaining" class="font-medium"></span></span></div>
+                    <div class="p-6 rounded-xl border bg-gradient-to-r from-indigo-50 to-fuchsia-50">
+                        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                            <div>
+                                <div class="text-xl font-semibold">Welcome, {{ Auth::user()->name }} <span id="db-premium-stars-inline" class="align-middle"></span></div>
+                                <div class="mt-1 text-sm text-gray-700">Premium: <span id="db-premium-status">Loading...</span> • Tier <span id="db-premium-tier">-</span> <span id="db-premium-remaining-wrap" class="hidden">• Remaining <span id="db-premium-remaining" class="font-medium"></span></span></div>
+                            </div>
+                            
                         </div>
                     </div>
                     <div class="mt-6 grid grid-cols-1 gap-4">
-                        <div class="p-4 border rounded-lg">
+                        <div class="p-4 rounded-xl border bg-white">
                             <div class="flex items-center justify-between">
                                 <div class="text-lg font-semibold">Your Time</div>
-                                <div id="dt-balance" class="text-2xl font-bold text-indigo-600">--:--:--</div>
+                                <div id="dt-balance" class="text-3xl font-extrabold bg-gradient-to-r from-indigo-600 to-fuchsia-600 bg-clip-text text-transparent">--:--:--</div>
                             </div>
                             <div id="dt-alert" class="mt-2 text-sm text-rose-600 hidden">Warning: Your time is below 1 hour.</div>
                             <div id="dt-status" class="mt-2 text-sm text-gray-500"></div>
                         </div>
-                        <div class="p-4 border rounded-lg">
+                        <div class="p-4 rounded-xl border bg-white">
                             <div class="text-lg font-semibold mb-2">Your Stats</div>
                             <div class="space-y-3">
                                 <div>
                                     <div class="flex justify-between text-sm"><span>Energy</span><span id="stat-energy-val">--%</span></div>
-                                    <div class="w-full bg-gray-200 rounded h-2 overflow-hidden"><div id="stat-energy" class="h-2 bg-amber-500" style="width:0%"></div></div>
+                                    <div class="w-full bg-gray-200 rounded-full h-2 overflow-hidden"><div id="stat-energy" class="h-2 bg-gradient-to-r from-amber-400 to-amber-600" style="width:0%"></div></div>
                                 </div>
                                 <div>
                                     <div class="flex justify-between text-sm"><span>Food</span><span id="stat-food-val">--%</span></div>
-                                    <div class="w-full bg-gray-200 rounded h-2 overflow-hidden"><div id="stat-food" class="h-2 bg-emerald-500" style="width:0%"></div></div>
+                                    <div class="w-full bg-gray-200 rounded-full h-2 overflow-hidden"><div id="stat-food" class="h-2 bg-gradient-to-r from-emerald-400 to-emerald-600" style="width:0%"></div></div>
                                 </div>
                                 <div>
                                     <div class="flex justify-between text-sm"><span>Water</span><span id="stat-water-val">--%</span></div>
-                                    <div class="w-full bg-gray-200 rounded h-2 overflow-hidden"><div id="stat-water" class="h-2 bg-cyan-500" style="width:0%"></div></div>
+                                    <div class="w-full bg-gray-200 rounded-full h-2 overflow-hidden"><div id="stat-water" class="h-2 bg-gradient-to-r from-cyan-400 to-cyan-600" style="width:0%"></div></div>
                                 </div>
                                 <div>
                                     <div class="flex justify-between text-sm"><span>Leisure</span><span id="stat-leisure-val">--%</span></div>
-                                    <div class="w-full bg-gray-200 rounded h-2 overflow-hidden"><div id="stat-leisure" class="h-2 bg-indigo-500" style="width:0%"></div></div>
+                                    <div class="w-full bg-gray-200 rounded-full h-2 overflow-hidden"><div id="stat-leisure" class="h-2 bg-gradient-to-r from-indigo-400 to-indigo-600" style="width:0%"></div></div>
                                 </div>
                                 <div>
                                     <div class="flex justify-between text-sm"><span>Health</span><span id="stat-health-val">--%</span></div>
-                                    <div class="w-full bg-gray-200 rounded h-2 overflow-hidden"><div id="stat-health" class="h-2 bg-rose-500" style="width:0%"></div></div>
+                                    <div class="w-full bg-gray-200 rounded-full h-2 overflow-hidden"><div id="stat-health" class="h-2 bg-gradient-to-r from-rose-400 to-rose-600" style="width:0%"></div></div>
                                 </div>
                                 <div id="stats-status" class="text-sm text-gray-500"></div>
                             </div>
                         </div>
+
                         
                     </div>
                     <script>
@@ -127,6 +131,16 @@
                                 else if (tier >= 1) { cls = 'bg-orange-100 text-orange-700'; label += ' • Bronze'; }
                                 return badge(label, cls);
                             }
+                            function tierStars(tier){
+                                tier = parseInt(tier||0,10);
+                                let color = 'text-gray-300';
+                                if (tier >= 20) { color = 'text-fuchsia-500'; }
+                                else if (tier >= 15) { color = 'text-sky-500'; }
+                                else if (tier >= 10) { color = 'text-amber-500'; }
+                                else if (tier >= 5) { color = 'text-slate-500'; }
+                                else if (tier >= 1) { color = 'text-orange-500'; }
+                                return `<i class=\"fa-solid fa-star ${color}\"></i>`;
+                            }
 
                             async function refresh() {
                                 // Premium status
@@ -136,6 +150,7 @@
                                         const ps = await rp.json();
                                         document.getElementById('db-premium-status').innerHTML = statusBadge(ps.active, ps.lifetime);
                                         document.getElementById('db-premium-tier').innerHTML = tierBadge(ps.tier ?? 0);
+                                        document.getElementById('db-premium-stars-inline').innerHTML = tierStars(ps.tier ?? 0);
                                         const remWrap = document.getElementById('db-premium-remaining-wrap');
                                         const rem = document.getElementById('db-premium-remaining');
                                         premActive = !!ps.active;
@@ -166,10 +181,12 @@
                                     const r2 = await fetch('/api/me/stats', { headers: { 'Accept': 'application/json' } });
                                     if (!r2.ok) throw new Error('failed');
                                     const s = await r2.json();
+                                    const cap = Math.max(100, parseInt(s.cap_percent ?? 100, 10));
                                     for (const k of ['energy','food','water','leisure','health']) {
-                                        const v = Math.max(0, Math.min(100, parseInt(s[k] ?? 0, 10)));
-                                        if (bars[k]) bars[k].style.width = v + '%';
-                                        if (vals[k]) vals[k].textContent = v + '%';
+                                        const val = Math.max(0, parseInt(s[k] ?? 0, 10));
+                                        const pct = Math.max(0, Math.min(100, Math.round((val / cap) * 100)));
+                                        if (bars[k]) bars[k].style.width = pct + '%';
+                                        if (vals[k]) vals[k].textContent = val + '%';
                                     }
                                     statsStatusEl.textContent = '';
                                 } catch (e) {

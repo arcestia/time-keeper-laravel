@@ -157,8 +157,9 @@ class PremiumController extends Controller
             }
             $stats = UserStats::query()->where('user_id', $user->id)->lockForUpdate()->first();
             if (!$stats) { $stats = UserStats::create(['user_id' => $user->id, 'energy' => 100, 'food' => 100, 'water' => 100, 'leisure' => 100, 'health' => 100]); }
-            // Heal: restore health to 100%
-            $stats->health = 100;
+            // Heal: restore health to current premium cap percent
+            $cap = \App\Services\PremiumService::statsCapPercentForUser($user->id);
+            $stats->health = (int) $cap;
             $stats->save();
             $p->weekly_heal_used = (int)$p->weekly_heal_used + 1;
             $p->save();

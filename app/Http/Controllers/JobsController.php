@@ -63,6 +63,7 @@ class JobsController extends Controller
                 'reward_seconds' => (int)$job->reward_seconds,
                 'cooldown_seconds' => (int)$job->cooldown_seconds,
                 'energy_cost' => (int)($job->energy_cost ?? 0),
+                'premium_only' => (bool)($job->premium_only ?? false),
                 'active_run' => $progress,
                 'next_available_at' => $nextAvailableAt,
             ];
@@ -164,14 +165,16 @@ class JobsController extends Controller
             $reserve = TimeKeeperReserve::query()->lockForUpdate()->first();
             if (!$reserve) { $reserve = TimeKeeperReserve::create(['balance_seconds' => 0]); }
             $amount = (int)$job->reward_seconds;
-            // Premium reward boost
-            $prem = PremiumService::getOrCreate($user->id);
-            if (PremiumService::isActive($prem)) {
-                $tier = PremiumService::tierFor((int)$prem->premium_seconds_accumulated);
-                $benefits = PremiumService::benefitsForTier($tier);
-                $mult = (float)($benefits['reward_multiplier'] ?? 1.0);
-                if ($mult > 1.0) {
-                    $amount = (int) floor($amount * $mult);
+            // Premium reward boost: apply only to premium-only jobs
+            if ((bool)($job->premium_only ?? false)) {
+                $prem = PremiumService::getOrCreate($user->id);
+                if (PremiumService::isActive($prem)) {
+                    $tier = PremiumService::tierFor((int)$prem->premium_seconds_accumulated);
+                    $benefits = PremiumService::benefitsForTier($tier);
+                    $mult = (float)($benefits['reward_multiplier'] ?? 1.0);
+                    if ($mult > 1.0) {
+                        $amount = (int) floor($amount * $mult);
+                    }
                 }
             }
             if ((int)$reserve->balance_seconds < $amount) {

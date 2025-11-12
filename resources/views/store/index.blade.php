@@ -279,18 +279,19 @@
                 const src = (document.querySelector('input[name="pay_src"]:checked')?.value) || 'wallet';
                 const qty = Math.max(1, parseInt(document.getElementById('sw-qty')?.value || '1', 10) || 1);
                 // Check caps
+                const cap = Math.max(100, parseInt(stats.cap_percent || 100, 10));
                 const nf = (stats.food || 0) + (restore_food * qty);
                 const nw = (stats.water || 0) + (restore_water * qty);
                 const ne = (stats.energy || 0) + (restore_energy * qty);
-                const exceeds = (nf > 100) || (nw > 100) || (ne > 100);
+                const exceeds = (nf > cap) || (nw > cap) || (ne > cap);
                 if (exceeds) {
                     const warn = await Swal.fire({
                         title: 'Stats cap warning',
                         icon: 'warning',
-                        html: `Buying ${qty} may exceed caps:<br>
-                               Food → ${Math.min(nf,100)}% (from ${stats.food||0}%)<br>
-                               Water → ${Math.min(nw,100)}% (from ${stats.water||0}%)<br>
-                               Energy → ${Math.min(ne,100)}% (from ${stats.energy||0}%)<br>
+                        html: `Buying ${qty} may exceed cap (${cap}%).<br>
+                               Food → ${Math.min(nf,cap)}% (from ${stats.food||0}%)<br>
+                               Water → ${Math.min(nw,cap)}% (from ${stats.water||0}%)<br>
+                               Energy → ${Math.min(ne,cap)}% (from ${stats.energy||0}%)<br>
                                Proceed?`,
                         showCancelButton: true,
                         confirmButtonText: 'Proceed',

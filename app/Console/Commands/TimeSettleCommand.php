@@ -10,7 +10,7 @@ use Carbon\CarbonImmutable;
 
 class TimeSettleCommand extends Command
 {
-    protected $signature = 'time:settle {--trace} {--limit=10}';
+    protected $signature = 'time:settle {--trace} {--limit=10} {--chunk=1000} {--bulk} {--chunked}';
 
     protected $description = 'Apply time decay to all active wallets once';
 
@@ -22,17 +22,36 @@ class TimeSettleCommand extends Command
         $verbose = (bool) $this->option('trace');
         $limit = (int) $this->option('limit');
         $printed = 0;
+        $chunk = (int) $this->option('chunk');
         $now = CarbonImmutable::now();
 
-        UserTimeWallet::query()->where('is_active', true)->chunkById(200, function ($wallets) use ($bank, &$processed, &$decayed, &$deactivated, $verbose, $limit, &$printed, $now) {
+        // Bulk is default. Use --chunked to force chunk processing.
+        if ($this->option('bulk') || !$this->option('chunked')) {
+            $summary = $bank->bulkSettleActiveWallets();
+            $processed = (int) ($summary['wallets_affected'] ?? 0);
+            $decayed = (int) ($summary['total_settled'] ?? 0);
+            $deactivated = (int) ($summary['deactivated'] ?? 0);
+
+            $reserve = optional(TimeKeeperReserve::query()->first())->balance_seconds ?? 0;
+            $this->info("Settled wallets: {$processed}");
+            $this->info("Total decayed seconds: {$decayed}");
+            $this->info("Deactivated wallets: {$deactivated}");
+            $this->info("Reserve balance (seconds): {$reserve}");
+            return self::SUCCESS;
+        }
+
+        UserTimeWallet::query()
+            ->select(['id', 'available_seconds', 'is_active', 'last_applied_at', 'drain_rate'])
+            ->where('is_active', true)
+            ->chunkById($chunk, function ($wallets) use ($bank, &$processed, &$decayed, &$deactivated, $verbose, $limit, &$printed, $now) {
             foreach ($wallets as $wallet) {
                 $before = (int) $wallet->available_seconds;
                 $wasActive = (bool) $wallet->is_active;
                 $elapsed = max(0, $now->diffInSeconds($wallet->last_applied_at ?: $now));
                 $rate = (float) $wallet->drain_rate;
                 $expected = (int) floor($elapsed * $rate);
-                $bank->settleWallet($wallet);
-                $after = (int) $wallet->fresh()->available_seconds;
+                $updated = $bank->settleWallet($wallet, $now);
+                $after = (int) $updated->available_seconds;
                 $processed++;
                 $d = max(0, $before - $after);
                 $decayed += $d;

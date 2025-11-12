@@ -6,15 +6,26 @@ use App\Models\TimeAccount;
 use App\Models\TimeLedger;
 use App\Models\UserTimeWallet;
 use App\Models\TimeKeeperReserve;
-use App\Models\WalletLedger;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
 class TimeBankService
 {
+    private ?int $reserveId = null;
+
     private function reserve(): TimeKeeperReserve
     {
         return TimeKeeperReserve::query()->firstOrCreate([], ['balance_seconds' => 0]);
+    }
+
+    private function ensureReserveId(): int
+    {
+        if ($this->reserveId !== null) {
+            return $this->reserveId;
+        }
+        $reserve = $this->reserve();
+        $this->reserveId = $reserve->getKey();
+        return $this->reserveId;
     }
 
     // Wallet decay now represents the per-second deduction source
@@ -56,25 +67,12 @@ class TimeBankService
             $wallet->save();
 
             if ($actualDecay > 0) {
-                $reserve = $this->reserve();
-                $reserve->balance_seconds = (int) $reserve->balance_seconds + $actualDecay;
-                $reserve->save();
-
-                WalletLedger::create([
-                    'user_time_wallet_id' => $wallet->id,
-                    'type' => 'decay',
-                    'amount_seconds' => -$actualDecay,
-                    'from_seconds' => $before,
-                    'to_seconds' => $new,
-                    'meta' => [
-                        'elapsed_seconds' => $elapsed,
-                        'drain_rate' => (float) $wallet->drain_rate,
-                    ],
-                ]);
+                $reserveId = $this->ensureReserveId();
+                TimeKeeperReserve::query()->whereKey($reserveId)->increment('balance_seconds', $actualDecay);
             }
         });
 
-        return $wallet->refresh();
+        return $wallet;
     }
 
     public function getWalletDisplayBalance(UserTimeWallet $wallet, ?CarbonImmutable $now = null): int
@@ -138,14 +136,59 @@ class TimeBankService
     public function settleAllWallets(): int
     {
         $count = 0;
+        $now = CarbonImmutable::now();
         UserTimeWallet::query()
+            ->select(['id', 'available_seconds', 'is_active', 'last_applied_at', 'drain_rate'])
             ->where('is_active', true)
-            ->chunkById(200, function ($wallets) use (&$count) {
+            ->chunkById(1000, function ($wallets) use (&$count, $now) {
                 foreach ($wallets as $wallet) {
-                    $this->settleWallet($wallet);
+                    $this->settleWallet($wallet, $now);
                     $count++;
                 }
             });
         return $count;
+    }
+
+    public function bulkSettleActiveWallets(): array
+    {
+        $now = CarbonImmutable::now();
+        $walletTable = (new UserTimeWallet())->getTable();
+        $reserveId = $this->ensureReserveId();
+
+        return DB::transaction(function () use ($now, $walletTable, $reserveId) {
+            $nowSql = $now->toDateTimeString();
+
+            $decayExpr = "LEAST(available_seconds, FLOOR(TIMESTAMPDIFF(SECOND, COALESCE(last_applied_at, '{$nowSql}'), '{$nowSql}') * drain_rate))";
+
+            $sumSql = "SELECT 
+                    COALESCE(SUM(GREATEST(0, {$decayExpr})), 0) AS total,
+                    COUNT(*) AS affected,
+                    COALESCE(SUM(CASE WHEN (available_seconds - {$decayExpr}) <= 0 THEN 1 ELSE 0 END), 0) AS deactivated
+                FROM {$walletTable}
+                WHERE is_active = 1";
+            $row = collect(DB::select($sumSql))->first();
+            $total = (int) ($row->total ?? 0);
+            $affected = (int) ($row->affected ?? 0);
+            $deactivated = (int) ($row->deactivated ?? 0);
+
+            if ($affected > 0) {
+                $updateSql = "UPDATE {$walletTable}
+                    SET available_seconds = GREATEST(0, available_seconds - {$decayExpr}),
+                        is_active = CASE WHEN (available_seconds - {$decayExpr}) <= 0 THEN 0 ELSE is_active END,
+                        last_applied_at = '{$nowSql}'
+                    WHERE is_active = 1";
+                DB::statement($updateSql);
+
+                if ($total > 0) {
+                    TimeKeeperReserve::query()->whereKey($reserveId)->increment('balance_seconds', $total);
+                }
+            }
+
+            return [
+                'total_settled' => $total,
+                'wallets_affected' => $affected,
+                'deactivated' => $deactivated,
+            ];
+        });
     }
 }

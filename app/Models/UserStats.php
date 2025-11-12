@@ -31,13 +31,14 @@ class UserStats extends Model
         return $this->belongsTo(User::class);
     }
 
-    public function clamp()
+    public function clamp(int $capPercent = 100)
     {
-        $this->energy = max(0, min(100, (int)$this->energy));
-        $this->food = max(0, min(100, (int)$this->food));
-        $this->water = max(0, min(100, (int)$this->water));
-        $this->leisure = max(0, min(100, (int)$this->leisure));
-        $this->health = max(0, min(100, (int)$this->health));
+        $cap = max(100, (int)$capPercent);
+        $this->energy = max(0, min($cap, (int)$this->energy));
+        $this->food = max(0, min($cap, (int)$this->food));
+        $this->water = max(0, min($cap, (int)$this->water));
+        $this->leisure = max(0, min($cap, (int)$this->leisure));
+        $this->health = max(0, min($cap, (int)$this->health));
         return $this;
     }
 }

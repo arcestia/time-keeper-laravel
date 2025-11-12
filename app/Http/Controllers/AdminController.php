@@ -13,6 +13,7 @@ use App\Models\StoreItem;
 use Flasher\Laravel\Facade\Flasher;
 use App\Models\StoreBalance;
 use App\Models\TimeKeeperReserve;
+use App\Services\PremiumService;
 use App\Support\TimeUnits;
 
 class AdminController extends Controller
@@ -117,9 +118,7 @@ class AdminController extends Controller
         $q = trim((string)$request->query('q', ''));
         $query = User::query()->select('id','username','email')->orderBy('id', 'asc')->limit(20);
         if ($q !== '') {
-            $query->where(function($w) use ($q) {
-                $w->where('username', 'like', "%$q%")->orWhere('email', 'like', "%$q%");
-            });
+            $query->where('username', 'like', "%$q%");
         }
         return response()->json($query->get());
     }
@@ -136,6 +135,9 @@ class AdminController extends Controller
             'leisure' => 100,
             'health' => 100,
         ]);
+        $cap = PremiumService::statsCapPercentForUser($target->id);
+        $p = PremiumService::getOrCreate($target->id);
+        $tier = PremiumService::tierFor((int)$p->premium_seconds_accumulated);
         return response()->json([
             'user' => ['id' => $target->id, 'username' => $target->username, 'email' => $target->email],
             'stats' => [
@@ -144,6 +146,12 @@ class AdminController extends Controller
                 'water' => (int)$stats->water,
                 'leisure' => (int)$stats->leisure,
                 'health' => (int)$stats->health,
+            ],
+            'premium' => [
+                'active' => PremiumService::isActive($p),
+                'lifetime' => (bool)$p->lifetime,
+                'tier' => (int)$tier,
+                'cap_percent' => (int)$cap,
             ],
         ]);
     }
@@ -155,11 +163,11 @@ class AdminController extends Controller
         $target = User::findOrFail($id);
         $data = $request->only(['energy','food','water','leisure','health']);
         $rules = [
-            'energy' => 'sometimes|integer|min:0|max:100',
-            'food' => 'sometimes|integer|min:0|max:100',
-            'water' => 'sometimes|integer|min:0|max:100',
-            'leisure' => 'sometimes|integer|min:0|max:100',
-            'health' => 'sometimes|integer|min:0|max:100',
+            'energy' => 'sometimes|integer|min:0',
+            'food' => 'sometimes|integer|min:0',
+            'water' => 'sometimes|integer|min:0',
+            'leisure' => 'sometimes|integer|min:0',
+            'health' => 'sometimes|integer|min:0',
         ];
         $validated = validator($data, $rules)->validate();
 
@@ -168,7 +176,8 @@ class AdminController extends Controller
             foreach ($validated as $k => $v) {
                 $stats->{$k} = (int)$v;
             }
-            $stats->clamp();
+            $cap = PremiumService::statsCapPercentForUser($target->id);
+            $stats->clamp($cap);
             $stats->save();
             return $stats;
         });

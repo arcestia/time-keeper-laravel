@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use App\Models\UserStats;
+use App\Services\PremiumService;
 
 class StatsController extends Controller
 {
@@ -19,12 +20,14 @@ class StatsController extends Controller
             'leisure' => 100,
             'health' => 100,
         ]);
+        $cap = PremiumService::statsCapPercentForUser($user->id);
         return response()->json([
             'energy' => (int)$stats->energy,
             'food' => (int)$stats->food,
             'water' => (int)$stats->water,
             'leisure' => (int)$stats->leisure,
             'health' => (int)$stats->health,
+            'cap_percent' => (int)$cap,
         ]);
     }
 
@@ -33,11 +36,11 @@ class StatsController extends Controller
         $user = $request->user();
         $data = $request->only(['energy','food','water','leisure','health']);
         $rules = [
-            'energy' => 'sometimes|integer|min:0|max:100',
-            'food' => 'sometimes|integer|min:0|max:100',
-            'water' => 'sometimes|integer|min:0|max:100',
-            'leisure' => 'sometimes|integer|min:0|max:100',
-            'health' => 'sometimes|integer|min:0|max:100',
+            'energy' => 'sometimes|integer|min:0',
+            'food' => 'sometimes|integer|min:0',
+            'water' => 'sometimes|integer|min:0',
+            'leisure' => 'sometimes|integer|min:0',
+            'health' => 'sometimes|integer|min:0',
         ];
         $validated = validator($data, $rules)->validate();
 
@@ -46,7 +49,8 @@ class StatsController extends Controller
             foreach ($validated as $k => $v) {
                 $stats->{$k} = (int)$v;
             }
-            $stats->clamp();
+            $cap = PremiumService::statsCapPercentForUser($user->id);
+            $stats->clamp($cap);
             $stats->save();
             return $stats;
         });
@@ -57,6 +61,7 @@ class StatsController extends Controller
             'water' => (int)$stats->water,
             'leisure' => (int)$stats->leisure,
             'health' => (int)$stats->health,
+            'cap_percent' => (int)PremiumService::statsCapPercentForUser($user->id),
         ]);
     }
 }
