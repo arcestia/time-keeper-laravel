@@ -37,6 +37,7 @@
                             <div class="text-sm text-gray-600 mb-2">Benefits</div>
                             <div class="text-sm text-gray-700">Stats cap x<span id="pm-cap">-</span></div>
                             <div class="text-sm text-gray-700">Job rewards x<span id="pm-reward">-</span></div>
+                            <div class="text-sm text-gray-700">XP gain x<span id="pm-xp">-</span></div>
                             <div class="text-sm text-gray-700">Store discount <span id="pm-disc">-</span>%</div>
                             <div class="text-sm text-gray-700">Heals/week <span id="pm-heals">-</span></div>
                             <div class="mt-3"><button id="pm-tiers-btn-active" type="button" class="px-3 py-2 border rounded text-sm">View Tiers</button></div>
@@ -73,20 +74,22 @@
                                 const steps=19, pos=(t-1);
                                 const capMin=1.20, capMax=11.00;
                                 const rewardMin=1.05, rewardMax=2.50;
+                                const xpMin=1.05, xpMax=3.00;
                                 const discMin=1, discMax=30;
                                 const cap=(capMin + (capMax-capMin)*(pos/steps));
                                 const reward=(rewardMin + (rewardMax-rewardMin)*(pos/steps));
+                                const xp=(xpMin + (xpMax-xpMin)*(pos/steps));
                                 const discount=Math.round(discMin + (discMax-discMin)*(pos/steps));
                                 let heals=0; if (t>=5){ if (t>=17) heals=5; else if (t>=14) heals=4; else if (t>=11) heals=3; else if (t>=8) heals=2; else heals=1; }
-                                return {cap,reward,discount,heals};
+                                return {cap,reward,xp,discount,heals};
                             }
                             function renderTiersTable(){
                                 let rows='';
                                 for (let i=1;i<=20;i++){
                                     const b=benefitsForTier(i);
-                                    rows += `<tr><td class=\"px-3 py-1 text-left\">${i}</td><td class=\"px-3 py-1\">x${b.cap.toFixed(2)}</td><td class=\"px-3 py-1\">x${b.reward.toFixed(2)}</td><td class=\"px-3 py-1\">${b.discount}%</td><td class=\"px-3 py-1\">${b.heals}</td></tr>`;
+                                    rows += `<tr><td class=\"px-3 py-1 text-left\">${i}</td><td class=\"px-3 py-1\">x${b.cap.toFixed(2)}</td><td class=\"px-3 py-1\">x${b.reward.toFixed(2)}</td><td class=\"px-3 py-1\">x${b.xp.toFixed(2)}</td><td class=\"px-3 py-1\">${b.discount}%</td><td class=\"px-3 py-1\">${b.heals}</td></tr>`;
                                 }
-                                return `<div class=\"overflow-x-auto\"><table class=\"min-w-full text-sm\"><thead><tr class=\"border-b\"><th class=\"px-3 py-1 text-left\">Tier</th><th class=\"px-3 py-1\">Stats Cap</th><th class=\"px-3 py-1\">Job Reward</th><th class=\"px-3 py-1\">Store Disc</th><th class=\"px-3 py-1\">Heals/Wk</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+                                return `<div class=\"overflow-x-auto\"><table class=\"min-w-full text-sm\"><thead><tr class=\"border-b\"><th class=\"px-3 py-1 text-left\">Tier</th><th class=\"px-3 py-1\">Stats Cap</th><th class=\"px-3 py-1\">Job Reward</th><th class=\"px-3 py-1\">XP Gain</th><th class=\"px-3 py-1\">Store Disc</th><th class=\"px-3 py-1\">Heals/Wk</th></tr></thead><tbody>${rows}</tbody></table></div>`;
                             }
                             let pmRemaining = 0; let pmActive = false; let pmLifetime = false;
                             async function load(){
@@ -121,6 +124,7 @@
                                 document.getElementById('pm-cap').textContent = (b.cap_multiplier||1).toFixed(2);
                                 document.getElementById('pm-reward').textContent = (b.reward_multiplier||1).toFixed(2);
                                 document.getElementById('pm-disc').textContent = (b.store_discount_pct||0);
+                                document.getElementById('pm-xp').textContent = (b.xp_multiplier||1).toFixed(2);
                                 document.getElementById('pm-heals').textContent = (b.heals_per_week||0);
                                 document.getElementById('pm-heal-used').textContent = d.weekly_heal_used;
                                 document.getElementById('pm-heal-reset').textContent = d.weekly_heal_reset_at || '-';
