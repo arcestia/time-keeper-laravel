@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\DB;
 use Flasher\Laravel\Facade\Flasher;
 use App\Services\PremiumService;
 use App\Models\Premium;
+use App\Services\ProgressService;
 
 class JobsController extends Controller
 {
@@ -203,16 +204,22 @@ class JobsController extends Controller
             $run->claimed_at = $now;
             $run->save();
 
-            return [$run, $wallet, $reserve];
+            // Compute XP: 1 XP per 30 reward seconds, minimum 1
+            $xp = max(1, intdiv($amount, 30));
+            // Grant XP
+            app(ProgressService::class)->addXp($user->id, $xp);
+
+            return [$run, $wallet, $reserve, $xp];
         });
 
-        [$run, $wallet, $reserve] = $result;
-        Flasher::addSuccess('Reward claimed: ' . $job->name);
+        [$run, $wallet, $reserve, $xp] = $result;
+        Flasher::addSuccess('Reward claimed: ' . $job->name . ' • +' . $xp . ' XP');
         return response()->json([
             'ok' => true,
             'wallet_seconds' => (int)$wallet->available_seconds,
             'reserve_seconds' => (int)$reserve->balance_seconds,
             'claimed_at' => CarbonImmutable::parse($run->claimed_at)->toIso8601String(),
+            'xp_awarded' => (int) $xp,
         ]);
     }
 }
