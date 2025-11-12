@@ -9,9 +9,16 @@
         <div class="max-w-5xl mx-auto sm:px-6 lg:px-8">
             <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                 <div class="p-6 text-gray-900">
-                    <div class="mb-4 text-sm text-gray-600">Global statistics (auto-refresh every 10s)</div>
+                    <div class="mb-4 text-sm text-gray-600">Global statistics (auto-refresh every 1 minute)</div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="mb-4 border-b border-gray-200">
+                        <nav class="flex -mb-px space-x-6" aria-label="Tabs">
+                            <button id="tab-btn-summary" class="border-indigo-500 text-indigo-600 whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm" data-tab="summary">Summary</button>
+                            <button id="tab-btn-charts" class="border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm" data-tab="charts">Charts</button>
+                        </nav>
+                    </div>
+
+                    <div id="tab-summary" class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div class="p-4 border rounded">
                             <div class="text-sm text-gray-600">Total Users</div>
                             <div id="st-users" class="text-2xl font-semibold">-</div>
@@ -30,7 +37,7 @@
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                    <div id="tab-summary-extra" class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                         <div class="p-4 border rounded">
                             <div class="text-sm text-gray-600">Total Time (Wallets)</div>
                             <div id="st-wallet" class="text-xl font-mono">-</div>
@@ -43,7 +50,7 @@
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                    <div id="tab-summary-extra-2" class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                         <div class="p-4 border rounded">
                             <div class="text-sm text-gray-600">Average Wallet Balance</div>
                             <div id="st-avg-wallet" class="text-xl font-mono">-</div>
@@ -54,7 +61,7 @@
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                    <div id="tab-summary-extra-3" class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                         <div class="p-4 border rounded">
                             <div class="text-sm text-gray-600">Time Keeper Reserve</div>
                             <div id="st-reserve" class="text-xl font-mono">-</div>
@@ -62,9 +69,9 @@
                         </div>
                     </div>
 
-                    <div class="mt-8">
+                    <div id="tab-charts" class="mt-8 hidden">
                         <div class="text-lg font-semibold mb-2">Time Series</div>
-                        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <div class="grid grid-cols-1 gap-6">
                             <div class="p-4 border rounded">
                                 <div class="text-sm text-gray-600 mb-2">Reserve Balance</div>
                                 <canvas id="chart-reserve" height="140"></canvas>
@@ -92,6 +99,43 @@
             const el = id => document.getElementById(id);
             const statusEl = el('st-status');
             let charts = { reserve: null, wallet: null, bank: null };
+            const tabs = {
+                summary: el('tab-summary'),
+                charts: el('tab-charts'),
+                btnSummary: el('tab-btn-summary'),
+                btnCharts: el('tab-btn-charts'),
+                summaryExtra: el('tab-summary-extra'),
+                summaryExtra2: el('tab-summary-extra-2'),
+                summaryExtra3: el('tab-summary-extra-3'),
+            };
+
+            function setTab(tab){
+                if (tab === 'charts') {
+                    tabs.summary.classList.add('hidden');
+                    if (tabs.summaryExtra) tabs.summaryExtra.classList.add('hidden');
+                    if (tabs.summaryExtra2) tabs.summaryExtra2.classList.add('hidden');
+                    if (tabs.summaryExtra3) tabs.summaryExtra3.classList.add('hidden');
+                    tabs.charts.classList.remove('hidden');
+                    tabs.btnSummary.classList.remove('border-indigo-500','text-indigo-600');
+                    tabs.btnSummary.classList.add('border-transparent','text-gray-500');
+                    tabs.btnCharts.classList.add('border-indigo-500','text-indigo-600');
+                    tabs.btnCharts.classList.remove('border-transparent','text-gray-500');
+                } else {
+                    tabs.charts.classList.add('hidden');
+                    tabs.summary.classList.remove('hidden');
+                    if (tabs.summaryExtra) tabs.summaryExtra.classList.remove('hidden');
+                    if (tabs.summaryExtra2) tabs.summaryExtra2.classList.remove('hidden');
+                    if (tabs.summaryExtra3) tabs.summaryExtra3.classList.remove('hidden');
+                    tabs.btnCharts.classList.remove('border-indigo-500','text-indigo-600');
+                    tabs.btnCharts.classList.add('border-transparent','text-gray-500');
+                    tabs.btnSummary.classList.add('border-indigo-500','text-indigo-600');
+                    tabs.btnSummary.classList.remove('border-transparent','text-gray-500');
+                }
+            }
+            if (tabs.btnSummary && tabs.btnCharts) {
+                tabs.btnSummary.addEventListener('click', () => setTab('summary'));
+                tabs.btnCharts.addEventListener('click', () => setTab('charts'));
+            }
 
             async function refresh() {
                 statusEl.textContent = 'Loading...';
@@ -126,7 +170,7 @@
             }
 
             refresh();
-            setInterval(refresh, 10000);
+            setInterval(refresh, 60000);
 
             
             function mkChart(ctx, label, data, color){
