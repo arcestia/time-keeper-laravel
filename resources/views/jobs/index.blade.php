@@ -79,8 +79,9 @@
                         const energy = (j.energy_cost ?? 0);
                         const base = (parseInt(j.reward_seconds,10)||0);
                         const eff = premActive && rewardMult>1 ? Math.floor(base * rewardMult) : base;
+                        const xp = Math.max(1, Math.floor(eff / 30));
                         const multText = premActive && rewardMult>1 ? (' • x' + rewardMult.toFixed(2)) : '';
-                        title.textContent = j.name + ' (+' + eff + 's' + multText + ', -' + energy + '% energy)';
+                        title.textContent = j.name + ' (+' + eff + 's' + multText + ', +' + xp + ' XP, -' + energy + '% energy)';
                         const meta = document.createElement('div');
                         meta.className = 'text-xs text-gray-500 mt-0.5';
                         meta.textContent = 'Duration: ' + fmtHMS(j.duration_seconds) + ' • Cooldown: ' + fmtHMS(j.cooldown_seconds);
