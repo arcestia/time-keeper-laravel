@@ -20,6 +20,31 @@ class PremiumController extends Controller
         return view('premium.index');
     }
 
+    public function preview(): JsonResponse
+    {
+        $user = Auth::user();
+        $amountStr = (string) request()->input('amount', '');
+        $seconds = \App\Support\TimeUnits::parseToSeconds($amountStr) ?? 0;
+        if ($seconds <= 0) {
+            return response()->json(['ok' => false, 'message' => 'Invalid amount'], 422);
+        }
+        $min = (int) (Setting::get('premium.min_purchase_seconds', 3600) ?? 3600);
+        if ($seconds < $min) {
+            return response()->json(['ok' => false, 'message' => 'Minimum purchase is ' . $min . ' seconds'], 422);
+        }
+        [$premUnit, $bankUnit] = $this->ratio();
+        $cost = (int) ceil($seconds * $bankUnit / $premUnit);
+        $bank = TimeAccount::where('user_id', $user->id)->first();
+        $bankSeconds = (int)($bank->base_balance_seconds ?? 0);
+        return response()->json([
+            'ok' => true,
+            'seconds' => (int)$seconds,
+            'cost_seconds' => (int)$cost,
+            'bank_seconds' => $bankSeconds,
+            'can_afford' => $bankSeconds >= $cost,
+        ]);
+    }
+
     public function status(): JsonResponse
     {
         $user = Auth::user();
@@ -27,13 +52,28 @@ class PremiumController extends Controller
         PremiumService::weeklyResetIfNeeded($p);
         $tier = PremiumService::tierFor((int)$p->premium_seconds_accumulated);
         $benefits = PremiumService::benefitsForTier($tier);
+        $thresholds = PremiumService::thresholds();
+        $prevReq = (int)($thresholds[$tier] ?? 0);
+        $nextTier = $tier < 20 ? ($tier + 1) : null;
+        $nextReq = $nextTier ? (int)($thresholds[$nextTier] ?? 0) : null;
+        $progress = null;
+        if ($nextTier && $nextReq && $nextReq > $prevReq) {
+            $num = max(0, (int)$p->premium_seconds_accumulated - $prevReq);
+            $den = max(1, $nextReq - $prevReq);
+            $progress = min(1, $num / $den);
+        }
+        $remaining = (int) PremiumService::remainingSeconds($p);
         return response()->json([
-            'active' => PremiumService::isActive($p),
+            'active' => $p->lifetime || $remaining > 0,
             'lifetime' => (bool)$p->lifetime,
-            'active_seconds' => (int) PremiumService::remainingSeconds($p),
+            'active_seconds' => $remaining,
+            'expires_at' => optional($p->premium_expires_at)->toIso8601String(),
             'accumulated_seconds' => (int)$p->premium_seconds_accumulated,
             'tier' => (int)$tier,
             'benefits' => $benefits,
+            'next_tier' => $nextTier,
+            'next_required_seconds' => $nextReq,
+            'progress_to_next' => $progress,
             'weekly_heal_used' => (int)$p->weekly_heal_used,
             'weekly_heal_reset_at' => optional($p->weekly_heal_reset_at)->toIso8601String(),
         ]);
@@ -85,6 +125,8 @@ class PremiumController extends Controller
         });
 
         [$bank, $p, $cost, $seconds] = $result;
+        // Refresh to ensure we have the committed expiration
+        $p->refresh();
         Flasher::addSuccess('Premium purchased');
         return response()->json([
             'ok' => true,

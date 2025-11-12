@@ -7,36 +7,57 @@
         <div class="max-w-3xl mx-auto sm:px-6 lg:px-8">
             <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                 <div class="p-6 text-gray-900">
-                    <h3 class="text-lg font-semibold mb-4">Your Premium Status</h3>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div class="p-4 border rounded">
-                            <div class="text-sm text-gray-600 mb-2">Status</div>
+                    <h3 class="text-lg font-semibold mb-4">Your Premium</h3>
+                    <div id="pm-landing" class="p-6 border rounded-lg hidden">
+                        <div class="text-xl font-semibold mb-2">Unlock Premium</div>
+                        <p class="text-gray-600 mb-4">Get higher stat caps, more job rewards, store discounts, weekly heals, and access to premium jobs.</p>
+                        <div class="flex items-center gap-2">
+                            <button id="pm-join-btn" class="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded">Join Premium</button>
+                            <button id="pm-tiers-btn" type="button" class="px-3 py-2 border rounded text-sm">View Tiers</button>
+                        </div>
+                    </div>
+
+                    <div id="pm-active-ui" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="p-4 rounded border bg-gradient-to-r from-indigo-50 to-fuchsia-50">
+                            <div class="text-sm text-gray-700 mb-2">Status</div>
                             <div id="pm-active" class="text-emerald-700 font-semibold">Loading...</div>
                             <div class="mt-1 text-sm text-gray-600">Tier: <span id="pm-tier">-</span></div>
                             <div class="mt-1 text-sm text-gray-600">Active time: <span id="pm-active-seconds">-</span></div>
                             <div class="mt-1 text-sm text-gray-600">Accumulated: <span id="pm-acc-seconds">-</span></div>
                             <div class="mt-1 text-sm text-gray-600">Heals used this week: <span id="pm-heal-used">-</span></div>
                             <div class="mt-1 text-xs text-gray-500">Resets at: <span id="pm-heal-reset">-</span></div>
+                            <div id="pm-progress-wrap" class="mt-4 hidden">
+                                <div class="flex justify-between text-xs text-gray-700 mb-1"><span>Progress to next tier (<span id="pm-next-tier">-</span>)</span><span id="pm-progress-pct">0%</span></div>
+                                <div class="w-full bg-gray-200 rounded-full h-2 overflow-hidden"><div id="pm-progress-bar" class="h-2 bg-gradient-to-r from-indigo-500 to-fuchsia-500" style="width:0%"></div></div>
+                            </div>
                         </div>
-                        <div class="p-4 border rounded">
+                        <div class="p-4 border rounded bg-white">
                             <div class="text-sm text-gray-600 mb-2">Benefits</div>
                             <div class="text-sm text-gray-700">Stats cap x<span id="pm-cap">-</span></div>
                             <div class="text-sm text-gray-700">Job rewards x<span id="pm-reward">-</span></div>
                             <div class="text-sm text-gray-700">Store discount <span id="pm-disc">-</span>%</div>
                             <div class="text-sm text-gray-700">Heals/week <span id="pm-heals">-</span></div>
+                            <div class="mt-3"><button id="pm-tiers-btn-active" type="button" class="px-3 py-2 border rounded text-sm">View Tiers</button></div>
                         </div>
                     </div>
 
-                    <div class="mt-6 p-4 border rounded">
+                    <div id="pm-buy-card" class="mt-6 p-4 border rounded bg-white">
                         <div class="text-sm text-gray-600 mb-2">Buy Premium</div>
                         <div class="flex items-center gap-2 flex-wrap">
                             <input id="pm-amount" class="border rounded px-3 py-2 w-64" placeholder="e.g. 1d 2h or 3600" />
                             <button id="pm-buy" class="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded">Buy</button>
                             <div id="pm-buy-status" class="text-sm text-gray-500"></div>
                         </div>
+                        <div class="mt-2 flex items-center gap-2 text-xs">
+                            <span class="text-gray-500">Quick:</span>
+                            <button data-preset="1h" class="px-2 py-1 rounded border text-gray-700 hover:bg-gray-50">1h</button>
+                            <button data-preset="1d" class="px-2 py-1 rounded border text-gray-700 hover:bg-gray-50">1d</button>
+                            <button data-preset="7d" class="px-2 py-1 rounded border text-gray-700 hover:bg-gray-50">7d</button>
+                        </div>
+                        <div class="mt-2 text-xs text-gray-500">Payment source: Bank balance only</div>
                     </div>
 
-                    <div class="mt-4 p-4 border rounded">
+                    <div id="pm-heal-card" class="mt-4 p-4 border rounded">
                         <div class="text-sm text-gray-600 mb-2">Weekly Heal</div>
                         <button id="pm-heal" class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded">Heal to Full Health</button>
                         <div id="pm-heal-status" class="mt-2 text-sm text-gray-500"></div>
@@ -45,10 +66,46 @@
                     <script>
                         (function(){
                             function fmtHMS(s){ s = parseInt(s,10)||0; const sign=s<0?-1:1; s=Math.abs(s); const h=Math.floor(s/3600), m=Math.floor((s%3600)/60), sec=s%60; return (sign<0?'-':'')+String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+String(sec).padStart(2,'0'); }
+                            function benefitsForTier(t){
+                                const steps=19, pos=(t-1);
+                                const capMin=1.20, capMax=11.00;
+                                const rewardMin=1.05, rewardMax=2.50;
+                                const discMin=1, discMax=30;
+                                const cap=(capMin + (capMax-capMin)*(pos/steps));
+                                const reward=(rewardMin + (rewardMax-rewardMin)*(pos/steps));
+                                const discount=Math.round(discMin + (discMax-discMin)*(pos/steps));
+                                let heals=0; if (t>=5){ if (t>=17) heals=5; else if (t>=14) heals=4; else if (t>=11) heals=3; else if (t>=8) heals=2; else heals=1; }
+                                return {cap,reward,discount,heals};
+                            }
+                            function renderTiersTable(){
+                                let rows='';
+                                for (let i=1;i<=20;i++){
+                                    const b=benefitsForTier(i);
+                                    rows += `<tr><td class=\"px-3 py-1 text-left\">${i}</td><td class=\"px-3 py-1\">x${b.cap.toFixed(2)}</td><td class=\"px-3 py-1\">x${b.reward.toFixed(2)}</td><td class=\"px-3 py-1\">${b.discount}%</td><td class=\"px-3 py-1\">${b.heals}</td></tr>`;
+                                }
+                                return `<div class=\"overflow-x-auto\"><table class=\"min-w-full text-sm\"><thead><tr class=\"border-b\"><th class=\"px-3 py-1 text-left\">Tier</th><th class=\"px-3 py-1\">Stats Cap</th><th class=\"px-3 py-1\">Job Reward</th><th class=\"px-3 py-1\">Store Disc</th><th class=\"px-3 py-1\">Heals/Wk</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+                            }
                             async function load(){
                                 const res = await fetch('/api/premium/status', { headers: { 'Accept': 'application/json' } });
                                 if (!res.ok) return;
                                 const d = await res.json();
+                                const activeUI = document.getElementById('pm-active-ui');
+                                const landing = document.getElementById('pm-landing');
+                                const buyCard = document.getElementById('pm-buy-card');
+                                const healCard = document.getElementById('pm-heal-card');
+                                if (!d.active) {
+                                    activeUI.classList.add('hidden');
+                                    landing.classList.remove('hidden');
+                                    document.getElementById('pm-join-btn').textContent = (d.accumulated_seconds>0) ? 'Renew Premium' : 'Join Premium';
+                                    buyCard.classList.add('hidden');
+                                    healCard.classList.add('hidden');
+                                } else {
+                                    activeUI.classList.remove('hidden');
+                                    landing.classList.add('hidden');
+                                    buyCard.classList.remove('hidden');
+                                    healCard.classList.remove('hidden');
+                                }
+
                                 document.getElementById('pm-active').textContent = d.active ? (d.lifetime ? 'Active (Lifetime)' : 'Active') : 'Inactive';
                                 document.getElementById('pm-tier').textContent = d.tier;
                                 document.getElementById('pm-active-seconds').textContent = fmtHMS(d.active_seconds);
@@ -60,6 +117,17 @@
                                 document.getElementById('pm-heals').textContent = (b.heals_per_week||0);
                                 document.getElementById('pm-heal-used').textContent = d.weekly_heal_used;
                                 document.getElementById('pm-heal-reset').textContent = d.weekly_heal_reset_at || '-';
+                                // Progress to next tier
+                                const pw = document.getElementById('pm-progress-wrap');
+                                if (d.next_tier && typeof d.progress_to_next === 'number') {
+                                    const pct = Math.round(d.progress_to_next * 100);
+                                    document.getElementById('pm-next-tier').textContent = d.next_tier;
+                                    document.getElementById('pm-progress-pct').textContent = pct + '%';
+                                    document.getElementById('pm-progress-bar').style.width = pct + '%';
+                                    pw.classList.remove('hidden');
+                                } else {
+                                    pw.classList.add('hidden');
+                                }
                             }
                             load();
                             document.getElementById('pm-buy').addEventListener('click', async () => {
@@ -84,6 +152,68 @@
                                     status.textContent = 'Healed to full health';
                                     load();
                                 } catch(e){ status.textContent = 'Failed'; }
+                            });
+
+                            // Landing: Join/Renew button → SweetAlert buy modal
+                            const joinBtn = document.getElementById('pm-join-btn');
+                            joinBtn.addEventListener('click', async () => {
+                                let amount = '';
+                                if (window.Swal) {
+                                    const { value } = await Swal.fire({
+                                        title: 'Purchase Premium',
+                                        input: 'text',
+                                        inputLabel: 'Enter duration (e.g. 1d 2h or 3600) — paid from Bank balance',
+                                        inputPlaceholder: 'e.g. 1d 2h or 3600',
+                                        showCancelButton: true,
+                                        confirmButtonText: 'Buy',
+                                    });
+                                    amount = value || '';
+                                } else {
+                                    amount = window.prompt('Enter premium duration (e.g. 1d 2h or 3600)') || '';
+                                }
+                                if (!amount) return;
+                                const status = document.getElementById('pm-buy-status');
+                                status.textContent = 'Checking...';
+                                try {
+                                    const prev = await fetch('/api/premium/preview', { method:'POST', headers: { 'Accept':'application/json','Content-Type':'application/json','X-Requested-With':'XMLHttpRequest','X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content }, body: JSON.stringify({ amount }) });
+                                    const p = await prev.json();
+                                    if (!prev.ok || !p.ok) throw new Error(p.message||'Invalid amount');
+                                    let proceed = true;
+                                    const html = `Duration: <strong>${amount}</strong><br>Premium seconds: <strong>${p.seconds}</strong><br>Cost (Bank): <strong>${p.cost_seconds} sec</strong><br>Bank balance: <strong>${p.bank_seconds} sec</strong>`;
+                                    if (window.Swal){
+                                        const { isConfirmed } = await Swal.fire({ title: 'Confirm Purchase', html, icon: (p.can_afford?'question':'warning'), showCancelButton: true, confirmButtonText: p.can_afford ? 'Buy' : 'Buy Anyway' });
+                                        proceed = isConfirmed;
+                                    } else {
+                                        proceed = window.confirm(`Confirm purchase?\n${amount} (${p.seconds}s)\nCost: ${p.cost_seconds}s from Bank`);
+                                    }
+                                    if (!proceed) { status.textContent = ''; return; }
+                                    status.textContent = 'Processing...';
+                                    const res = await fetch('/api/premium/buy', { method:'POST', headers: { 'Accept':'application/json','Content-Type':'application/json','X-Requested-With':'XMLHttpRequest','X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content }, body: JSON.stringify({ amount }) });
+                                    const data = await res.json();
+                                    if (!res.ok || !data.ok) throw new Error(data.message||'Failed');
+                                    status.textContent = 'Purchased';
+                                    load();
+                                } catch(e){ status.textContent = 'Failed'; }
+                            });
+
+                            // View tiers modal
+                            const tiersBtn = document.getElementById('pm-tiers-btn');
+                            if (tiersBtn) tiersBtn.addEventListener('click', async () => {
+                                const html = renderTiersTable();
+                                if (window.Swal) {
+                                    await Swal.fire({ title: 'Premium Tiers & Benefits', html, width: 700 });
+                                } else {
+                                    const w = window.open('', '_blank'); if (w){ w.document.write(html); w.document.close(); }
+                                }
+                            });
+                            const tiersBtnActive = document.getElementById('pm-tiers-btn-active');
+                            if (tiersBtnActive) tiersBtnActive.addEventListener('click', async () => {
+                                const html = renderTiersTable();
+                                if (window.Swal) {
+                                    await Swal.fire({ title: 'Premium Tiers & Benefits', html, width: 700 });
+                                } else {
+                                    const w = window.open('', '_blank'); if (w){ w.document.write(html); w.document.close(); }
+                                }
                             });
                         })();
                     </script>

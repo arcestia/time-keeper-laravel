@@ -62,6 +62,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/premium', [\App\Http\Controllers\PremiumController::class, 'page'])->name('premium.page');
     Route::get('/api/premium/status', [\App\Http\Controllers\PremiumController::class, 'status'])->name('premium.status');
     Route::post('/api/premium/buy', [\App\Http\Controllers\PremiumController::class, 'buy'])->name('premium.buy');
+    Route::post('/api/premium/preview', [\App\Http\Controllers\PremiumController::class, 'preview'])->name('premium.preview');
     Route::post('/api/premium/heal', [\App\Http\Controllers\PremiumController::class, 'heal'])->name('premium.heal');
     Route::get('/api/store/balances', [StoreController::class, 'balances'])->name('store.balances');
     Route::post('/api/store/buy/{key}', [StoreController::class, 'buy'])->name('store.buy');

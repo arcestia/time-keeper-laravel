@@ -103,8 +103,8 @@ class PremiumService
         if (!$p->premium_expires_at) return 0;
         $now = CarbonImmutable::now();
         $exp = CarbonImmutable::parse($p->premium_expires_at);
-        if ($now->gte($exp)) return 0;
-        return $exp->diffInSeconds($now);
+        $delta = $exp->getTimestamp() - $now->getTimestamp();
+        return $delta > 0 ? ($delta + 1) : 0;
     }
 
     public static function weeklyResetIfNeeded(Premium $p): void
