@@ -33,6 +33,9 @@
                     <x-nav-link :href="route('jobs.page')" :active="request()->routeIs('jobs.page')">
                         {{ __('Jobs') }}
                     </x-nav-link>
+                    <x-nav-link :href="route('expeditions.page')" :active="request()->routeIs('expeditions.page')">
+                        {{ __('Expeditions') }}
+                    </x-nav-link>
                     @if(Auth::user() && Auth::user()->is_admin)
                     <x-nav-link :href="route('admin.page')" :active="request()->routeIs('admin.page')">
                         {{ __('Admin') }}
@@ -110,6 +113,9 @@
             </x-responsive-nav-link>
             <x-responsive-nav-link :href="route('jobs.page')" :active="request()->routeIs('jobs.page')">
                 {{ __('Jobs') }}
+            </x-responsive-nav-link>
+            <x-responsive-nav-link :href="route('expeditions.page')" :active="request()->routeIs('expeditions.page')">
+                {{ __('Expeditions') }}
             </x-responsive-nav-link>
             @if(Auth::user() && Auth::user()->is_admin)
             <x-responsive-nav-link :href="route('admin.page')" :active="request()->routeIs('admin.page')">

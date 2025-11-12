@@ -7,6 +7,7 @@ use App\Http\Controllers\StatsController;
 use App\Http\Controllers\JobsController;
 use App\Http\Controllers\StoreController;
 use App\Http\Controllers\InventoryController;
+use App\Http\Controllers\ExpeditionController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -80,6 +81,14 @@ Route::middleware('auth')->group(function () {
     Route::post('/api/inventory/consume', [InventoryController::class, 'consume'])->name('inventory.consume');
     Route::post('/api/inventory/move-to-storage', [InventoryController::class, 'moveToStorage'])->name('inventory.move_to_storage');
     Route::post('/api/inventory/move-to-inventory', [InventoryController::class, 'moveToInventory'])->name('inventory.move_to_inventory');
+
+    // Expeditions
+    Route::get('/expeditions', [ExpeditionController::class, 'page'])->name('expeditions.page');
+    Route::get('/api/expeditions', [ExpeditionController::class, 'catalog'])->name('expeditions.catalog');
+    Route::get('/api/expeditions/my', [ExpeditionController::class, 'my'])->name('expeditions.my');
+    Route::post('/api/expeditions/buy/{id}', [ExpeditionController::class, 'buy'])->name('expeditions.buy');
+    Route::post('/api/expeditions/start/{id}', [ExpeditionController::class, 'start'])->name('expeditions.start');
+    Route::post('/api/expeditions/claim/{id}', [ExpeditionController::class, 'claim'])->name('expeditions.claim');
 
     // Time Keeper stats
     Route::get('/keeper', [TimeKeeperController::class, 'page'])->name('keeper.page');
