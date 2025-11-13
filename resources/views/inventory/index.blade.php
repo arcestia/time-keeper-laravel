@@ -17,9 +17,18 @@
                     </div>
 
                     <div class="border-b mt-4">
-                        <div class="flex items-center gap-3">
+                        <div class="flex items-center gap-3 flex-wrap">
                             <button id="tab-inv" class="px-3 py-2 text-sm font-medium border-b-2 border-indigo-600 text-indigo-700">Inventory (0)</button>
                             <button id="tab-sto" class="px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-800">Storage (0)</button>
+                            <div class="ml-auto flex items-center gap-2">
+                                <input id="inv-search" type="text" placeholder="Search items" class="border rounded px-2 py-1 text-sm" />
+                                <select id="inv-sort" class="border rounded px-2 py-1 text-sm">
+                                    <option value="name">Name</option>
+                                    <option value="qty">Quantity</option>
+                                    <option value="price">Price</option>
+                                    <option value="type">Type</option>
+                                </select>
+                            </div>
                         </div>
                     </div>
 
@@ -42,6 +51,8 @@
             const invMeta = document.getElementById('inv-meta');
             const tabInv = document.getElementById('tab-inv');
             const tabSto = document.getElementById('tab-sto');
+            const searchBox = document.getElementById('inv-search');
+            const sortSel = document.getElementById('inv-sort');
             document.getElementById('inv-refresh').addEventListener('click', load);
 
             let activeTab = 'inv';
@@ -75,6 +86,16 @@
                 const title = document.createElement('div');
                 title.className = 'font-medium';
                 title.textContent = name + ' • x' + qty;
+                const sub = document.createElement('div');
+                sub.className = 'mt-0.5 text-xs text-gray-600';
+                const type = entry?.item?.type || '';
+                const desc = entry?.item?.description || '';
+                const price = entry?.item?.price_seconds != null ? Number(entry.item.price_seconds) : null;
+                const parts = [];
+                if (type) parts.push(type);
+                if (price != null) parts.push(`${price.toLocaleString()} sec`);
+                if (desc) parts.push(desc);
+                sub.textContent = parts.join(' • ');
                 const actions = document.createElement('div');
                 actions.className = 'mt-1 text-sm flex items-center gap-2 flex-wrap';
                 if (side === 'inv') {
@@ -86,6 +107,21 @@
                         if (!q) return;
                         await act('/api/inventory/consume', { key, qty: q });
                     });
+                    const sellBtn = document.createElement('button');
+                    sellBtn.className = 'px-2 py-1 rounded border text-gray-700 hover:bg-gray-50';
+                    sellBtn.textContent = 'Sell (50%)';
+                    sellBtn.addEventListener('click', async () => {
+                        const q = await promptQty('Sell how many?', 1, qty);
+                        if (!q) return;
+                        await act('/api/inventory/sell', { key, qty: q });
+                    });
+                    const moveAllBtn = document.createElement('button');
+                    moveAllBtn.className = 'px-2 py-1 rounded border text-gray-700 hover:bg-gray-50';
+                    moveAllBtn.textContent = 'Move all to storage';
+                    moveAllBtn.addEventListener('click', async () => {
+                        if (!qty) return;
+                        await act('/api/inventory/move-to-storage', { key, qty });
+                    });
                     const toStorageBtn = document.createElement('button');
                     toStorageBtn.className = 'px-2 py-1 rounded border text-gray-700 hover:bg-gray-50';
                     toStorageBtn.textContent = 'Move to storage';
@@ -95,6 +131,8 @@
                         await act('/api/inventory/move-to-storage', { key, qty: q });
                     });
                     actions.appendChild(consumeManyBtn);
+                    actions.appendChild(sellBtn);
+                    actions.appendChild(moveAllBtn);
                     actions.appendChild(toStorageBtn);
                 } else {
                     const toInventoryBtn = document.createElement('button');
@@ -108,7 +146,8 @@
                     actions.appendChild(toInventoryBtn);
                 }
                 li.appendChild(title);
-                li.appendChild(actions);
+                li.appendChild(sub);
+            li.appendChild(actions);
                 return li;
             }
 
@@ -161,7 +200,9 @@
                         status.textContent = msg;
                         return;
                     }
-                    if (d && d.moved) {
+                    if (d && d.credited_seconds) {
+                        status.textContent = `Sold • Credited ${Number(d.credited_seconds||0).toLocaleString()} seconds`;
+                    } else if (d && d.moved) {
                         status.textContent = `Moved ${d.moved}`;
                     } else {
                         status.textContent = 'Done';
@@ -172,31 +213,63 @@
                 }
             }
 
+            let dataInv = [];
+            let dataSto = [];
+            let dataCap = 20000;
+            function applyFilterSort(list) {
+                const q = (searchBox.value || '').toLowerCase();
+                let out = list;
+                if (q) out = out.filter(e => {
+                    const n = (e?.item?.name||'').toLowerCase();
+                    const t = (e?.item?.type||'').toLowerCase();
+                    const d = (e?.item?.description||'').toLowerCase();
+                    return n.includes(q) || t.includes(q) || d.includes(q);
+                });
+                const by = sortSel.value || 'name';
+                out = out.slice().sort((a,b) => {
+                    if (by === 'qty') return (parseInt(b.quantity,10)||0) - (parseInt(a.quantity,10)||0);
+                    if (by === 'price') return (parseInt(b?.item?.price_seconds,10)||0) - (parseInt(a?.item?.price_seconds,10)||0);
+                    if (by === 'type') return String(a?.item?.type||'').localeCompare(String(b?.item?.type||''));
+                    return String(a?.item?.name||'').localeCompare(String(b?.item?.name||''));
+                });
+                return out;
+            }
+            function render() {
+                invList.innerHTML = '';
+                stoList.innerHTML = '';
+                const inv = applyFilterSort(dataInv);
+                const sto = applyFilterSort(dataSto);
+                const invTotal = dataInv.reduce((s,e) => s + (parseInt(e.quantity,10)||0), 0);
+                const stoTotal = dataSto.reduce((s,e) => s + (parseInt(e.quantity,10)||0), 0);
+                tabInv.textContent = `Inventory (${invTotal})`;
+                tabSto.textContent = `Storage (${stoTotal})`;
+                invMeta.textContent = `Inventory total: ${invTotal.toLocaleString()} • Global cap: ${dataCap.toLocaleString()}`;
+                invMeta.classList.remove('text-gray-700','text-yellow-600','text-red-600');
+                const ratio = dataCap > 0 ? invTotal / dataCap : 0;
+                if (ratio >= 0.9) invMeta.classList.add('text-red-600');
+                else if (ratio >= 0.75) invMeta.classList.add('text-yellow-600');
+                else invMeta.classList.add('text-gray-700');
+                if (inv.length === 0) invList.innerHTML = '<li class="py-2 text-sm text-gray-500">No items in inventory</li>';
+                else inv.forEach(e => invList.appendChild(row(e, 'inv')));
+                if (sto.length === 0) stoList.innerHTML = '<li class="py-2 text-sm text-gray-500">No items in storage</li>';
+                else sto.forEach(e => stoList.appendChild(row(e, 'sto')));
+            }
             async function load() {
-                invList.innerHTML = ''; stoList.innerHTML='';
                 try {
                     const res = await fetch('/api/inventory', { headers: { 'Accept':'application/json' } });
                     if (!res.ok) throw new Error();
                     const d = await res.json();
-                    const inv = Array.isArray(d.inventory) ? d.inventory : [];
-                    const sto = Array.isArray(d.storage) ? d.storage : [];
-                    // counts
-                    const invTotal = inv.reduce((s,e) => s + (parseInt(e.quantity,10)||0), 0);
-                    const stoTotal = sto.reduce((s,e) => s + (parseInt(e.quantity,10)||0), 0);
-                    tabInv.textContent = `Inventory (${invTotal})`;
-                    tabSto.textContent = `Storage (${stoTotal})`;
-                    const cap = Number(d.cap || 20000);
-                    invMeta.textContent = `Inventory total: ${invTotal.toLocaleString()} • Global cap: ${cap.toLocaleString()}`;
-
-                    if (inv.length === 0) invList.innerHTML = '<li class="py-2 text-sm text-gray-500">No items in inventory</li>';
-                    else inv.forEach(e => invList.appendChild(row(e, 'inv')));
-                    if (sto.length === 0) stoList.innerHTML = '<li class="py-2 text-sm text-gray-500">No items in storage</li>';
-                    else sto.forEach(e => stoList.appendChild(row(e, 'sto')));
+                    dataInv = Array.isArray(d.inventory) ? d.inventory : [];
+                    dataSto = Array.isArray(d.storage) ? d.storage : [];
+                    dataCap = Number(d.cap || 20000);
                     status.textContent = '';
+                    render();
                 } catch (e) {
                     status.textContent = 'Unable to load inventory';
                 }
             }
+            searchBox.addEventListener('input', render);
+            sortSel.addEventListener('change', render);
 
             setTab('inv');
             load();

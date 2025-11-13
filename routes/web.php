@@ -79,6 +79,7 @@ Route::middleware('auth')->group(function () {
     // Inventory APIs
     Route::get('/api/inventory', [InventoryController::class, 'list'])->name('inventory.list');
     Route::post('/api/inventory/consume', [InventoryController::class, 'consume'])->name('inventory.consume');
+    Route::post('/api/inventory/sell', [InventoryController::class, 'sell'])->name('inventory.sell');
     Route::post('/api/inventory/move-to-storage', [InventoryController::class, 'moveToStorage'])->name('inventory.move_to_storage');
     Route::post('/api/inventory/move-to-inventory', [InventoryController::class, 'moveToInventory'])->name('inventory.move_to_inventory');
 

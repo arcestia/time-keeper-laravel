@@ -9,6 +9,8 @@ use App\Models\UserStorageItem;
 use App\Models\StoreItem;
 use App\Models\UserStats;
 use App\Services\PremiumService;
+use App\Models\UserTimeWallet;
+use Carbon\CarbonImmutable;
 
 class InventoryController extends Controller
 {
@@ -90,6 +92,43 @@ class InventoryController extends Controller
             $stats->energy = min($cap, (int)$stats->energy + ((int)$item->restore_energy * $qty));
             $stats->save();
             return response()->json(['ok'=>true,'stats'=>['energy'=>(int)$stats->energy,'food'=>(int)$stats->food,'water'=>(int)$stats->water]]);
+        });
+    }
+
+    public function sell(): JsonResponse
+    {
+        $userId = Auth::id();
+        $key = (string) request('key');
+        $qty = max(1, (int) request('qty', 1));
+        $now = CarbonImmutable::now();
+        return DB::transaction(function() use($userId,$key,$qty,$now){
+            $item = StoreItem::where(['key'=>$key])->lockForUpdate()->firstOrFail();
+            $inv = UserInventoryItem::where(['user_id'=>$userId,'store_item_id'=>$item->id])->lockForUpdate()->first();
+            if (!$inv || $inv->quantity < $qty) { abort(422,'Not enough quantity in inventory'); }
+            $pricePer = (int) $item->price_seconds;
+            $proceedsPer = (int) floor($pricePer * 0.5);
+            $proceeds = $proceedsPer * $qty;
+            $wallet = UserTimeWallet::where('user_id',$userId)->lockForUpdate()->first();
+            if (!$wallet) {
+                $wallet = UserTimeWallet::create([
+                    'user_id' => $userId,
+                    'available_seconds' => 0,
+                    'last_applied_at' => $now,
+                    'drain_rate' => 1.000,
+                    'is_active' => true,
+                ]);
+            }
+            $wallet->available_seconds = (int)$wallet->available_seconds + $proceeds;
+            $wallet->save();
+            $inv->quantity = (int)$inv->quantity - $qty; if ($inv->quantity <= 0) { $inv->delete(); } else { $inv->save(); }
+            $item->quantity = (int) $item->quantity + $qty; $item->save();
+            return response()->json([
+                'ok' => true,
+                'qty_sold' => (int)$qty,
+                'credited_seconds' => (int)$proceeds,
+                'wallet_seconds' => (int)$wallet->available_seconds,
+                'remaining_inventory' => (int) ($inv->quantity ?? 0),
+            ]);
         });
     }
 }
