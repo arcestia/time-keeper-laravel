@@ -58,6 +58,11 @@ class TimeKeeperController extends Controller
         $expActive = (int) \App\Models\UserExpedition::where('status','active')->count();
         $expCompleted = (int) \App\Models\UserExpedition::whereIn('status',['completed','claimed'])->count();
 
+        // Total user XP (global)
+        $totalUserXp = (int) (\App\Models\UserProgress::query()->sum('total_xp'));
+        // Total steps (all time) across all users
+        $totalStepsAll = (int) (\App\Models\UserDailyStat::query()->sum('steps_count'));
+
         return response()->json([
             'total_users' => $totalUsers,
             'active_users' => $activeWalletUsers,
@@ -78,6 +83,8 @@ class TimeKeeperController extends Controller
             'expeditions_pending' => $expPending,
             'expeditions_active' => $expActive,
             'expeditions_completed' => $expCompleted,
+            'total_user_xp' => $totalUserXp,
+            'total_steps_all' => $totalStepsAll,
         ]);
     }
 

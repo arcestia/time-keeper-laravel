@@ -31,6 +31,7 @@
                             <div class="inline-flex rounded overflow-hidden border">
                                 <button class="px-3 py-1 text-sm lbm-btn bg-indigo-50 text-indigo-700" data-metric="steps">Steps</button>
                                 <button class="px-3 py-1 text-sm lbm-btn" data-metric="exp_completed">Expeditions Completed</button>
+                                <button class="px-3 py-1 text-sm lbm-btn" data-metric="level">Level</button>
                             </div>
                         </div>
                         <div class="overflow-x-auto">
@@ -100,6 +101,14 @@
                         <div class="p-4 border rounded">
                             <div class="text-sm text-gray-600">Items in Circulation</div>
                             <div class="text-xl"><span id="st-items-inv">-</span> inventory • <span id="st-items-sto">-</span> storage</div>
+                        </div>
+                        <div class="p-4 border rounded">
+                            <div class="text-sm text-gray-600">Total User XP (Global)</div>
+                            <div id="st-total-user-xp" class="text-xl">-</div>
+                        </div>
+                        <div class="p-4 border rounded">
+                            <div class="text-sm text-gray-600">Total Steps (All-time)</div>
+                            <div id="st-total-steps-all" class="text-xl">-</div>
                         </div>
                     </div>
 
@@ -219,6 +228,10 @@
                     el('st-exp-pend').textContent = (d.expeditions_pending||0).toLocaleString();
                     el('st-exp-act').textContent = (d.expeditions_active||0).toLocaleString();
                     el('st-exp-comp').textContent = (d.expeditions_completed||0).toLocaleString();
+                    // Total user XP
+                    const ux = el('st-total-user-xp'); if (ux) ux.textContent = (d.total_user_xp||0).toLocaleString();
+                    // Total steps (all-time)
+                    const tsAll = el('st-total-steps-all'); if (tsAll) tsAll.textContent = (d.total_steps_all||0).toLocaleString();
                     statusEl.textContent = '';
                 } catch (e) {
                     statusEl.textContent = 'Unable to load stats';

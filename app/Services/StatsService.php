@@ -60,6 +60,18 @@ class StatsService
 
     public function leaderboard(string $period, string $metric, int $limit=25, ?string $refDate=null)
     {
+        if ($metric === 'level') {
+            $rows = DB::table('user_progress as up')
+                ->join('users as u', 'u.id', '=', 'up.user_id')
+                ->select('u.username', 'up.user_id', DB::raw('up.level as total'), 'up.total_xp')
+                ->orderByDesc('up.level')
+                ->orderByDesc('up.total_xp')
+                ->orderBy('u.username')
+                ->limit($limit)
+                ->get();
+            return $rows->map(function($r, $idx){ $r->rank = $idx + 1; return $r; });
+        }
+
         [$startDate, $endDate] = $this->rangeFor($period, $refDate);
         $col = $metric === 'steps' ? 'steps_count' : 'expeditions_completed';
         $rows = DB::table('user_daily_stats as uds')
@@ -71,8 +83,6 @@ class StatsService
             ->orderBy('u.username')
             ->limit($limit)
             ->get();
-        return $rows->map(function($r, $idx){
-            $r->rank = $idx + 1; return $r;
-        });
+        return $rows->map(function($r, $idx){ $r->rank = $idx + 1; return $r; });
     }
 }

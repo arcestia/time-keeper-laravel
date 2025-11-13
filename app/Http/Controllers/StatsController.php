@@ -86,9 +86,10 @@ class StatsController extends Controller
     {
         $period = in_array($period, ['daily','weekly','monthly'], true) ? $period : 'daily';
         $metric = $request->query('metric','steps');
-        if (!in_array($metric, ['steps','exp_completed'], true)) { $metric = 'steps'; }
-        // map metric to service column
-        $metricKey = $metric === 'steps' ? 'steps' : 'expeditions_completed';
+        if (!in_array($metric, ['steps','exp_completed','level'], true)) { $metric = 'steps'; }
+        // map metric to service column / key
+        $metricKey = $metric;
+        if ($metricKey === 'exp_completed') { $metricKey = 'expeditions_completed'; }
         $limit = max(1, min(100, (int)$request->query('limit', 25)));
         // reference date params (UTC)
         $ref = $request->query('date');
