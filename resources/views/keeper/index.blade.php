@@ -15,7 +15,37 @@
                         <nav class="flex -mb-px space-x-6" aria-label="Tabs">
                             <button id="tab-btn-summary" class="border-indigo-500 text-indigo-600 whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm" data-tab="summary">Summary</button>
                             <button id="tab-btn-charts" class="border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm" data-tab="charts">Charts</button>
+                            <button id="tab-btn-boards" class="border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm" data-tab="boards">Leaderboards</button>
                         </nav>
+                    </div>
+
+                    <div id="tab-boards" class="mt-8 hidden">
+                        <div class="flex items-center gap-3 mb-3">
+                            <div class="text-sm text-gray-600">Period:</div>
+                            <div class="inline-flex rounded overflow-hidden border">
+                                <button class="px-3 py-1 text-sm lbp-btn bg-indigo-50 text-indigo-700" data-period="daily">Daily</button>
+                                <button class="px-3 py-1 text-sm lbp-btn" data-period="weekly">Weekly</button>
+                                <button class="px-3 py-1 text-sm lbp-btn" data-period="monthly">Monthly</button>
+                            </div>
+                            <div class="text-sm text-gray-600 ml-4">Metric:</div>
+                            <div class="inline-flex rounded overflow-hidden border">
+                                <button class="px-3 py-1 text-sm lbm-btn bg-indigo-50 text-indigo-700" data-metric="steps">Steps</button>
+                                <button class="px-3 py-1 text-sm lbm-btn" data-metric="exp_completed">Expeditions Completed</button>
+                            </div>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full text-sm">
+                                <thead>
+                                    <tr class="text-left text-gray-600 border-b">
+                                        <th class="py-2 pr-4">Rank</th>
+                                        <th class="py-2 pr-4">Username</th>
+                                        <th class="py-2">Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="lb-body"></tbody>
+                            </table>
+                        </div>
+                        <div id="lb-status" class="text-sm text-gray-500 mt-2"></div>
                     </div>
 
                     <div id="tab-summary" class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -106,8 +136,10 @@
             const tabs = {
                 summary: el('tab-summary'),
                 charts: el('tab-charts'),
+                boards: el('tab-boards'),
                 btnSummary: el('tab-btn-summary'),
                 btnCharts: el('tab-btn-charts'),
+                btnBoards: el('tab-btn-boards'),
                 summaryExtra: el('tab-summary-extra'),
                 summaryExtra2: el('tab-summary-extra-2'),
                 summaryExtra3: el('tab-summary-extra-3'),
@@ -124,21 +156,41 @@
                     tabs.btnSummary.classList.add('border-transparent','text-gray-500');
                     tabs.btnCharts.classList.add('border-indigo-500','text-indigo-600');
                     tabs.btnCharts.classList.remove('border-transparent','text-gray-500');
+                    tabs.boards.classList.add('hidden');
+                    tabs.btnBoards.classList.remove('border-indigo-500','text-indigo-600');
+                    tabs.btnBoards.classList.add('border-transparent','text-gray-500');
                 } else {
                     tabs.charts.classList.add('hidden');
-                    tabs.summary.classList.remove('hidden');
-                    if (tabs.summaryExtra) tabs.summaryExtra.classList.remove('hidden');
-                    if (tabs.summaryExtra2) tabs.summaryExtra2.classList.remove('hidden');
-                    if (tabs.summaryExtra3) tabs.summaryExtra3.classList.remove('hidden');
                     tabs.btnCharts.classList.remove('border-indigo-500','text-indigo-600');
                     tabs.btnCharts.classList.add('border-transparent','text-gray-500');
-                    tabs.btnSummary.classList.add('border-indigo-500','text-indigo-600');
-                    tabs.btnSummary.classList.remove('border-transparent','text-gray-500');
+                    if (tab === 'boards') {
+                        tabs.summary.classList.add('hidden');
+                        if (tabs.summaryExtra) tabs.summaryExtra.classList.add('hidden');
+                        if (tabs.summaryExtra2) tabs.summaryExtra2.classList.add('hidden');
+                        if (tabs.summaryExtra3) tabs.summaryExtra3.classList.add('hidden');
+                        tabs.boards.classList.remove('hidden');
+                        tabs.btnBoards.classList.add('border-indigo-500','text-indigo-600');
+                        tabs.btnBoards.classList.remove('border-transparent','text-gray-500');
+                        tabs.btnSummary.classList.remove('border-indigo-500','text-indigo-600');
+                        tabs.btnSummary.classList.add('border-transparent','text-gray-500');
+                        loadLeaderboard();
+                    } else {
+                        tabs.boards.classList.add('hidden');
+                        tabs.summary.classList.remove('hidden');
+                        if (tabs.summaryExtra) tabs.summaryExtra.classList.remove('hidden');
+                        if (tabs.summaryExtra2) tabs.summaryExtra2.classList.remove('hidden');
+                        if (tabs.summaryExtra3) tabs.summaryExtra3.classList.remove('hidden');
+                        tabs.btnBoards.classList.remove('border-indigo-500','text-indigo-600');
+                        tabs.btnBoards.classList.add('border-transparent','text-gray-500');
+                        tabs.btnSummary.classList.add('border-indigo-500','text-indigo-600');
+                        tabs.btnSummary.classList.remove('border-transparent','text-gray-500');
+                    }
                 }
             }
             if (tabs.btnSummary && tabs.btnCharts) {
                 tabs.btnSummary.addEventListener('click', () => setTab('summary'));
                 tabs.btnCharts.addEventListener('click', () => setTab('charts'));
+                if (tabs.btnBoards) tabs.btnBoards.addEventListener('click', () => setTab('boards'));
             }
 
             async function refresh() {
@@ -184,7 +236,47 @@
             refresh();
             setInterval(refresh, 60000);
 
-            
+            // Leaderboards
+            let lbPeriod = 'daily';
+            let lbMetric = 'steps';
+            const lbBody = document.getElementById('lb-body');
+            const lbStatus = document.getElementById('lb-status');
+            function bindLbControls(){
+                document.querySelectorAll('.lbp-btn').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        document.querySelectorAll('.lbp-btn').forEach(x=>x.classList.remove('bg-indigo-50','text-indigo-700'));
+                        btn.classList.add('bg-indigo-50','text-indigo-700');
+                        lbPeriod = btn.getAttribute('data-period') || 'daily';
+                        loadLeaderboard();
+                    });
+                });
+                document.querySelectorAll('.lbm-btn').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        document.querySelectorAll('.lbm-btn').forEach(x=>x.classList.remove('bg-indigo-50','text-indigo-700'));
+                        btn.classList.add('bg-indigo-50','text-indigo-700');
+                        lbMetric = btn.getAttribute('data-metric') || 'steps';
+                        loadLeaderboard();
+                    });
+                });
+            }
+            async function loadLeaderboard(){
+                if (!lbBody) return;
+                lbBody.innerHTML=''; lbStatus.textContent='Loading...';
+                try{
+                    const res = await fetch(`/api/leaderboards/${lbPeriod}?metric=${encodeURIComponent(lbMetric)}&limit=25`, { headers:{'Accept':'application/json'} });
+                    if (!res.ok) throw new Error('failed');
+                    const js = await res.json();
+                    const rows = js && js.data ? js.data : [];
+                    for (const r of rows){
+                        const tr = document.createElement('tr');
+                        tr.innerHTML = `<td class="py-2 pr-4">${r.rank}</td><td class="py-2 pr-4">${r.username || ('User '+r.user_id)}</td><td class=\"py-2 font-mono\">${(r.total||0).toLocaleString()}</td>`;
+                        lbBody.appendChild(tr);
+                    }
+                    lbStatus.textContent = rows.length === 0 ? 'No data' : '';
+                }catch(e){ lbStatus.textContent='Unable to load leaderboard'; }
+            }
+            bindLbControls();
+
             function ensureExpeditionsCard(){
                 if (document.getElementById('st-exp-card')) return;
                 const host = document.getElementById('tab-summary-extra-3');

@@ -88,6 +88,8 @@ class TravelController extends Controller
             return [$p, $wallet, $grantedItem];
         });
         [$p, $wallet, $grantedItem] = $result;
+        // count 1 step for this travel action (UTC daily)
+        app(\App\Services\StatsService::class)->addSteps($user->id, 1);
         return response()->json([
             'ok' => true,
             'delay_seconds' => (int)$delay,

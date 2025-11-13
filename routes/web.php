@@ -108,6 +108,10 @@ Route::middleware('auth')->group(function () {
     Route::post('/keeper/admin/deposit', [TimeKeeperController::class, 'adminDepositFromUserToReserve'])->name('keeper.admin.deposit');
     Route::post('/keeper/admin/withdraw', [TimeKeeperController::class, 'adminWithdrawFromReserveToUser'])->name('keeper.admin.withdraw');
     Route::post('/keeper/admin/distribute', [TimeKeeperController::class, 'adminDistributeReserveToAll'])->name('keeper.admin.distribute');
+
+    // Stats and Leaderboards
+    Route::post('/api/stats/steps', [\App\Http\Controllers\StatsController::class, 'addSteps'])->name('stats.add_steps');
+    Route::get('/api/leaderboards/{period}', [\App\Http\Controllers\StatsController::class, 'leaderboard'])->name('leaderboards.period');
 });
 
 require __DIR__.'/auth.php';

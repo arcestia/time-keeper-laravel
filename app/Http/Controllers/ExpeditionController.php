@@ -131,6 +131,8 @@ class ExpeditionController extends Controller
                     $lootAgg[$si->key]['qty'] += $qty;
                 }
                 $ue->loot = $loot; $ue->status = 'claimed'; $ue->save();
+                // daily stats: increment expeditions completed (UTC boundaries) for bulk claim
+                app(\App\Services\StatsService::class)->incExpCompleted($user->id);
             });
         }
         return response()->json(['ok'=>true,'claimed'=>$claimed,'total_xp'=>$totalXp,'loot'=>array_values($lootAgg)]);
@@ -429,6 +431,8 @@ class ExpeditionController extends Controller
                 $sto->quantity = (int)$sto->quantity + $q; $sto->save();
             }
             $ue->loot = $loot; $ue->status = 'claimed'; $ue->save();
+            // daily stats: increment expeditions completed (UTC boundaries)
+            app(\App\Services\StatsService::class)->incExpCompleted($user->id);
             Flasher::addSuccess('Expedition claimed: +'.$xp.' XP and loot');
             return response()->json(['ok'=>true,'xp'=>$xp,'time_seconds'=>$time,'loot'=>$loot]);
         });
