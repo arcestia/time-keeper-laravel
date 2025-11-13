@@ -43,11 +43,26 @@ class ExpeditionController extends Controller
                 $ue->save();
                 $cfg = config('expeditions');
                 $hours = max(1, (int) ceil(((int)$ue->duration_seconds)/3600));
-                $level = (int) optional($ue->expedition)->level ?? 1;
+                $level = (int) optional($ue->expedition)->level ?? 1; // expedition level
+                $progress = app(ProgressService::class)->getOrCreate($user->id);
+                $uLevel = max(1, (int) $progress->level); // user level
                 $xpRaw = (int) (
-                    $level * (float)($cfg['xp_per_level'] ?? 12)
-                    + $hours * ((float)($cfg['xp_per_hour_base'] ?? 10) + $level * (float)($cfg['xp_per_hour_per_level'] ?? 1.2))
+                    ($level * (float)($cfg['xp_per_level'] ?? 12))
+                    + ($uLevel * (float)($cfg['xp_per_user_level'] ?? 10))
+                    + $hours * (
+                        (float)($cfg['xp_per_hour_base'] ?? 10)
+                        + $level * (float)($cfg['xp_per_hour_per_level'] ?? 1.2)
+                        + $uLevel * (float)($cfg['xp_per_hour_per_user_level'] ?? 1.5)
+                    )
                 );
+                // composite multiplier by level, cost, energy, duration
+                $exp = $ue->expedition; $costSec = (int) ($exp->cost_seconds ?? 0); $energyPct = (int) ($exp->energy_cost_pct ?? 0);
+                $levMult = (float) ($cfg['level_multipliers'][$level] ?? 1.0);
+                $costW = (float) ($cfg['cost_weight'] ?? 0.0);
+                $energyW = (float) ($cfg['energy_weight'] ?? 0.0);
+                $consW = (float) ($cfg['consumable_weight'] ?? 0.0);
+                $mult = max(1.0, $levMult * (1.0 + $costSec * $costW + $energyPct * $energyW + $hours * $consW));
+                $xpRaw = (int) floor($xpRaw * $mult);
                 $xpVar = max((float)$cfg['variance_min'], 0.0);
                 $xpVarMax = max((float)$cfg['variance_max'], $xpVar);
                 $xpRoll = (int) random_int((int) floor($xpRaw * $xpVar), (int) ceil($xpRaw * $xpVarMax));
@@ -69,6 +84,8 @@ class ExpeditionController extends Controller
                 $stats->save();
                 // time reward
                 $timeRaw = (int) ($level * (int)$cfg['time_per_level'] + $hours * (int)$cfg['time_per_hour']);
+                // apply same multiplier to time
+                $timeRaw = (int) floor($timeRaw * $mult);
                 $timeRoll = (int) random_int((int) floor($timeRaw * $xpVar), (int) ceil($timeRaw * $xpVarMax));
                 if (PremiumService::isActive($prem)) {
                     $tier = PremiumService::tierFor((int)$prem->premium_seconds_accumulated);
@@ -265,10 +282,17 @@ class ExpeditionController extends Controller
             $ue->save();
             $cfg = config('expeditions');
             $hours = max(1, (int) ceil(((int)$ue->duration_seconds)/3600));
-            $level = (int) optional($ue->expedition)->level ?? 1;
+            $level = (int) optional($ue->expedition)->level ?? 1; // expedition level
+            $progress = app(ProgressService::class)->getOrCreate($user->id);
+            $uLevel = max(1, (int) $progress->level); // user level
             $xpRaw = (int) (
-                $level * (float)($cfg['xp_per_level'] ?? 12)
-                + $hours * ((float)($cfg['xp_per_hour_base'] ?? 10) + $level * (float)($cfg['xp_per_hour_per_level'] ?? 1.2))
+                ($level * (float)($cfg['xp_per_level'] ?? 12))
+                + ($uLevel * (float)($cfg['xp_per_user_level'] ?? 10))
+                + $hours * (
+                    (float)($cfg['xp_per_hour_base'] ?? 10)
+                    + $level * (float)($cfg['xp_per_hour_per_level'] ?? 1.2)
+                    + $uLevel * (float)($cfg['xp_per_hour_per_user_level'] ?? 1.5)
+                )
             );
             $xpVar = max((float)$cfg['variance_min'], 0.0);
             $xpVarMax = max((float)$cfg['variance_max'], $xpVar);
@@ -291,6 +315,8 @@ class ExpeditionController extends Controller
             $stats->save();
             // time reward
             $timeRaw = (int) ($level * (int)$cfg['time_per_level'] + $hours * (int)$cfg['time_per_hour']);
+            // apply same multiplier to time
+            $timeRaw = (int) floor($timeRaw * $mult);
             $time = (int) random_int((int) floor($timeRaw * $xpVar), (int) ceil($timeRaw * $xpVarMax));
             if (PremiumService::isActive($prem)) {
                 $tier = PremiumService::tierFor((int)$prem->premium_seconds_accumulated);

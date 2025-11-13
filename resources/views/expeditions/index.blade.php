@@ -90,7 +90,12 @@
                 $xpMult = (float)($premBenefits['xp_multiplier'] ?? 1.0);
                 $timeMult = (float)($premBenefits['time_multiplier'] ?? 1.0);
             @endphp
+            @php
+                $progress = app(\App\Services\ProgressService::class)->getOrCreate(auth()->id());
+                $userLevel = (int)($progress->level ?? 1);
+            @endphp
             const PREM = @json(['active'=>$premActive,'xp_multiplier'=>$xpMult,'time_multiplier'=>$timeMult]);
+            const USER = @json(['level'=>$userLevel]);
             const panelCatalog = document.getElementById('panel-catalog');
             const panelMy = document.getElementById('panel-my');
             const tabCatalog = document.getElementById('tab-catalog');
@@ -166,10 +171,16 @@
             function clamp01(x){ return Math.max(0, Math.min(1, x)); }
             function estXp(level, seconds){
                 const h = Math.max(1, Math.ceil((parseInt(seconds,10)||0)/3600));
-                const lvl = Math.max(1, parseInt(level,10)||1);
+                const lvl = Math.max(1, parseInt(level,10)||1); // expedition level
+                const uLvl = Math.max(1, parseInt(USER?.level||1,10)); // user level
                 const base = EXP_CFG.xp_per_hour_base ?? 10;
                 const perLv = EXP_CFG.xp_per_hour_per_level ?? 1.2;
-                const raw = (lvl * (EXP_CFG.xp_per_level ?? 12)) + (h * (base + lvl * perLv));
+                const perUserLv = EXP_CFG.xp_per_hour_per_user_level ?? 1.5;
+                const raw = (
+                    (lvl * (EXP_CFG.xp_per_level ?? 12))
+                    + (uLvl * (EXP_CFG.xp_per_user_level ?? 10))
+                    + (h * (base + lvl * perLv + uLvl * perUserLv))
+                );
                 const vmin = EXP_CFG.variance_min || 0.9, vmax = Math.max(EXP_CFG.variance_max||1.2, vmin);
                 let lo = Math.floor(raw * vmin), hi = Math.ceil(raw * vmax);
                 if (PREM && PREM.active && PREM.xp_multiplier && PREM.xp_multiplier > 1) {
