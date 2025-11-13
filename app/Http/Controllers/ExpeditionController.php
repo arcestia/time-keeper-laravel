@@ -14,6 +14,7 @@ use App\Models\StoreItem;
 use App\Models\UserStorageItem;
 use App\Services\PremiumService;
 use App\Services\ProgressService;
+use App\Services\ExpeditionMasteryService;
 use Flasher\Laravel\Facade\Flasher;
 
 class ExpeditionController extends Controller
@@ -73,6 +74,12 @@ class ExpeditionController extends Controller
                     $mult = (float)($benefits['xp_multiplier'] ?? 1.0);
                     if ($mult > 1.0) { $xpRoll = max(1, (int) floor($xpRoll * $mult)); }
                 }
+                // apply expedition mastery XP bonus and award mastery XP progress
+                $mastery = app(ExpeditionMasteryService::class)->getOrCreate($user->id);
+                $mBonuses = app(ExpeditionMasteryService::class)->bonusesForLevel((int)$mastery->level);
+                $mXpMult = (float)($mBonuses['xp_multiplier'] ?? 1.0);
+                if ($mXpMult > 1.0) { $xpRoll = max(1, (int) floor($xpRoll * $mXpMult)); }
+                app(ExpeditionMasteryService::class)->addXp($user->id, (int)$xpRaw);
                 app(ProgressService::class)->addXp($user->id, $xpRoll);
                 $totalXp += $xpRoll; $claimed++;
                 // deplete food/water
@@ -141,8 +148,54 @@ class ExpeditionController extends Controller
     public function my(): JsonResponse
     {
         $userId = Auth::id();
-        $rows = UserExpedition::with('expedition')->where('user_id',$userId)->orderByDesc('id')->limit(200)->get();
-        return response()->json($rows);
+        $status = request('status');
+        $level = (int) request('level', 0);
+        $page = (int) request('page', 0);
+        $per = (int) request('per_page', 0);
+
+        // Backward-compatible: if no filter/pagination params are provided, return up to 200 as before
+        if (!$status && $level === 0 && $page === 0 && $per === 0) {
+            $rows = UserExpedition::with('expedition')
+                ->where('user_id',$userId)
+                ->orderByDesc('id')
+                ->limit(200)
+                ->get();
+            return response()->json($rows);
+        }
+
+        // Paginated + filtered
+        $q = UserExpedition::with('expedition')->where('user_id',$userId);
+        if (is_string($status) && $status !== '') {
+            $q->where('status', $status);
+        }
+        if ($level >= 1 && $level <= 5) {
+            $q->whereHas('expedition', function($qq) use($level){ $qq->where('level', $level); });
+        }
+        $per = max(1, min(100, $per ?: 50));
+        $res = $q->orderByDesc('id')->paginate($per);
+        return response()->json($res);
+    }
+
+    public function myCounts(): JsonResponse
+    {
+        $userId = Auth::id();
+        $rows = UserExpedition::query()
+            ->select('status', \DB::raw('COUNT(*) as c'))
+            ->where('user_id', $userId)
+            ->groupBy('status')
+            ->get();
+        $map = [
+            'pending' => 0,
+            'active' => 0,
+            'completed' => 0,
+            'claimed' => 0,
+        ];
+        foreach ($rows as $r) {
+            $s = (string)$r->status;
+            if (array_key_exists($s, $map)) { $map[$s] = (int)$r->c; }
+        }
+        $map['completed_all'] = (int)$map['completed'] + (int)$map['claimed'];
+        return response()->json(['ok'=>true,'counts'=>$map]);
     }
 
     public function buy(int $expeditionId): JsonResponse
@@ -251,6 +304,10 @@ class ExpeditionController extends Controller
                 $benefits = PremiumService::benefitsForTier($tier);
                 $allowed = max(1, (int)($benefits['expedition_total_slots'] ?? 1));
             }
+            // add expedition mastery extra slots
+            $mastery = app(ExpeditionMasteryService::class)->getOrCreate($user->id);
+            $mBonuses = app(ExpeditionMasteryService::class)->bonusesForLevel((int)$mastery->level);
+            $allowed = (int)$allowed + (int)($mBonuses['expedition_extra_slots'] ?? 0);
             $activeCount = (int) UserExpedition::where(['user_id'=>$user->id,'status'=>'active'])->lockForUpdate()->count();
             if ($activeCount >= $allowed) {
                 return response()->json(['ok'=>false,'message'=>"Active expeditions limit reached (${activeCount}/${allowed}). Upgrade premium tier or wait until one finishes."], 422);
@@ -311,6 +368,12 @@ class ExpeditionController extends Controller
                 $mult = (float)($benefits['xp_multiplier'] ?? 1.0);
                 if ($mult > 1.0) { $xp = max(1, (int) floor($xp * $mult)); }
             }
+            // apply expedition mastery XP bonus and award mastery XP progress
+            $mastery = app(ExpeditionMasteryService::class)->getOrCreate($user->id);
+            $mBonuses = app(ExpeditionMasteryService::class)->bonusesForLevel((int)$mastery->level);
+            $mXpMult = (float)($mBonuses['xp_multiplier'] ?? 1.0);
+            if ($mXpMult > 1.0) { $xp = max(1, (int) floor($xp * $mXpMult)); }
+            app(ExpeditionMasteryService::class)->addXp($user->id, (int)$xpRaw);
             app(ProgressService::class)->addXp($user->id, $xp);
             // deplete food/water based on duration: 1% per hour rounded up
             $hours = max(1, (int) ceil(((int)$ue->duration_seconds)/3600));
@@ -321,6 +384,13 @@ class ExpeditionController extends Controller
             $stats->water = max(0, (int)$stats->water - $deplete);
             $stats->save();
             // time reward
+            // define composite multiplier and costs to avoid undefined vars
+            $exp = $ue->expedition; $costSec = (int) ($exp->cost_seconds ?? 0); $energyPct = (int) ($exp->energy_cost_pct ?? 0);
+            $levMult = (float) ($cfg['level_multipliers'][$level] ?? 1.0);
+            $costW = (float) ($cfg['cost_weight'] ?? 0.0);
+            $energyW = (float) ($cfg['energy_weight'] ?? 0.0);
+            $consW = (float) ($cfg['consumable_weight'] ?? 0.0);
+            $mult = max(1.0, $levMult * (1.0 + $costSec * $costW + $energyPct * $energyW + $hours * $consW));
             $timeRaw = (int) ($level * (int)$cfg['time_per_level'] + $hours * (int)$cfg['time_per_hour']);
             // apply same multiplier to time
             $timeRaw = (int) floor($timeRaw * $mult);

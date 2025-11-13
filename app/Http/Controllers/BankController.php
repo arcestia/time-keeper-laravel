@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\TimeAccount;
 use App\Models\UserTimeWallet;
 use App\Services\TimeBankService;
+use App\Services\TimeTokenService;
 use App\Support\TimeUnits;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -52,6 +53,42 @@ class BankController extends Controller
     {
         $request->session()->forget('bank_logged_in');
         return response()->json(['status' => 'ok']);
+    }
+
+    public function exchangeTokens(Request $request, TimeTokenService $tokens): JsonResponse
+    {
+        $data = $request->validate([
+            'color' => ['required','string','in:red,blue,green,yellow,black'],
+            'qty' => ['required','integer','min:1','max:1000000'],
+        ]);
+
+        $user = Auth::user();
+        if (!$this->bankLoggedIn($request)) {
+            return response()->json(['message' => 'Bank locked'], 403);
+        }
+
+        $result = $tokens->exchange($user->id, $data['color'], (int)$data['qty']);
+        if (!($result['ok'] ?? false)) {
+            $msg = (string)($result['message'] ?? 'Exchange failed');
+            return response()->json(['message' => $msg], 422);
+        }
+        return response()->json([
+            'ok' => true,
+            'color' => $data['color'],
+            'exchanged_qty' => (int)$result['exchanged_qty'],
+            'credited_seconds' => (int)$result['credited_seconds'],
+            'remaining_qty' => (int)$result['remaining_qty'],
+        ]);
+    }
+
+    public function tokenBalances(Request $request, TimeTokenService $tokens): JsonResponse
+    {
+        $user = Auth::user();
+        if (!$this->bankLoggedIn($request)) {
+            return response()->json(['message' => 'Bank locked'], 403);
+        }
+        $balances = $tokens->getBalances($user->id);
+        return response()->json(['ok'=>true,'balances'=>$balances]);
     }
 
     public function userTime(Request $request): JsonResponse

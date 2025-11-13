@@ -65,6 +65,25 @@
                                 </div>
                             </div>
 
+                            <div class="border rounded p-4">
+                                <div class="font-semibold mb-2">Exchange Time Tokens</div>
+                                <div id="tok-balances" class="text-xs text-gray-600 mb-2">Balances: --</div>
+                                <div class="flex gap-2 flex-wrap items-center">
+                                    <label for="tok-color" class="text-sm text-gray-600">Color</label>
+                                    <select id="tok-color" class="border rounded px-3 py-2">
+                                        <option value="red">Red (1 Week)</option>
+                                        <option value="blue">Blue (1 Month)</option>
+                                        <option value="green">Green (1 Year)</option>
+                                        <option value="yellow">Yellow (1 Decade)</option>
+                                        <option value="black">Black (1 Century)</option>
+                                    </select>
+                                    <label for="tok-qty" class="text-sm text-gray-600">Qty</label>
+                                    <input id="tok-qty" type="number" min="1" value="1" class="border rounded px-3 py-2 w-24" />
+                                    <button id="tok-exchange-btn" class="bg-purple-600 text-white px-4 py-2 rounded">Exchange</button>
+                                </div>
+                                <div id="tok-result" class="text-xs text-gray-500 mt-1"></div>
+                            </div>
+
                             <div class="flex justify-end">
                                 <button id="logout-btn" class="text-sm text-gray-600 hover:text-gray-800">Lock Bank</button>
                             </div>
@@ -93,6 +112,11 @@
                             const trTo = document.getElementById('tr-to');
                             const trAmount = document.getElementById('tr-amount');
                             const trBtn = document.getElementById('tr-btn');
+                            const tokColor = document.getElementById('tok-color');
+                            const tokQty = document.getElementById('tok-qty');
+                            const tokBtn = document.getElementById('tok-exchange-btn');
+                            const tokResult = document.getElementById('tok-result');
+                            const tokBalancesEl = document.getElementById('tok-balances');
                             const logoutBtn = document.getElementById('logout-btn');
 
                             let loggedIn = false;
@@ -162,11 +186,22 @@
                                     walletCurrent = parseInt(data.wallet_seconds || 0, 10);
                                     bankEl.textContent = bankCurrent ? fmt(bankCurrent) : '--:--:--';
                                     walletEl.textContent = fmt(walletCurrent);
+                                    if (loggedIn) { await loadTokenBalances(); }
                                     last = Date.now();
                                     statusEl.textContent = '';
                                 } catch (e) {
                                     statusEl.textContent = 'Unable to load bank info';
                                 }
+                            }
+
+                            async function loadTokenBalances(){
+                                try{
+                                    const r = await fetch('/bank/token-balances', { headers: { 'Accept':'application/json' } });
+                                    if (!r.ok) throw new Error('');
+                                    const j = await r.json();
+                                    const b = j && j.balances ? j.balances : {};
+                                    tokBalancesEl.textContent = `Balances: Red ${b.red||0}, Blue ${b.blue||0}, Green ${b.green||0}, Yellow ${b.yellow||0}, Black ${b.black||0}`;
+                                }catch{ tokBalancesEl.textContent = 'Balances: --'; }
                             }
 
                             setupBtn.addEventListener('click', async () => {
@@ -292,6 +327,21 @@
                                     bankCurrent = parseInt(data.balance_seconds || 0, 10);
                                     bankEl.textContent = fmt(bankCurrent);
                                     statusEl.textContent = `Transferred ${data.transferred_formatted}`;
+                                } catch (e) { statusEl.textContent = e.message; }
+                            });
+
+                            tokBtn.addEventListener('click', async () => {
+                                if (!loggedIn) { statusEl.textContent = 'Login first'; return; }
+                                const color = (tokColor.value || 'red');
+                                const qty = Math.max(1, parseInt(tokQty.value||'1',10));
+                                statusEl.textContent = 'Exchanging...'; tokResult.textContent = '';
+                                try {
+                                    const data = await postJSON('/bank/exchange-tokens', { color, qty });
+                                    bankCurrent = parseInt((await (await fetch('/bank/data', { headers: { 'Accept':'application/json' } })).json()).balance_seconds || 0, 10);
+                                    bankEl.textContent = fmt(bankCurrent);
+                                    statusEl.textContent = 'Exchanged';
+                                    tokResult.textContent = `Exchanged ${data.exchanged_qty} ${color} token(s); credited ${data.credited_seconds}s`;
+                                    await loadTokenBalances();
                                 } catch (e) { statusEl.textContent = e.message; }
                             });
 

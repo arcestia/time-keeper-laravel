@@ -11,6 +11,17 @@
                         <div class="text-lg font-semibold">Explore & Manage</div>
                         <button id="xp-refresh" class="text-sm text-indigo-600 hover:underline">Refresh</button>
                     </div>
+                    @php
+                        $m = app(\App\Services\ExpeditionMasteryService::class)->getOrCreate(auth()->id());
+                        $mb = app(\App\Services\ExpeditionMasteryService::class)->bonusesForLevel((int)$m->level);
+                        $mXpMult = (float)($mb['xp_multiplier'] ?? 1.0);
+                        $mExtra = (int)($mb['expedition_extra_slots'] ?? 0);
+                    @endphp
+                    <div class="mt-2 text-sm text-gray-700 flex items-center gap-3">
+                        <span class="px-2 py-0.5 rounded bg-indigo-50 text-indigo-700">Mastery Lv {{ (int)$m->level }}</span>
+                        <span class="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700">XP Bonus x{{ number_format($mXpMult,2) }}</span>
+                        <span class="px-2 py-0.5 rounded bg-amber-50 text-amber-700">Extra Slots +{{ $mExtra }}</span>
+                    </div>
 
                     <div class="border-b mt-4">
                         <div class="flex items-center gap-3">
@@ -68,6 +79,9 @@
                         <div id="my-status" class="mt-2 text-sm text-gray-500"></div>
                         <div class="mt-3">
                             <ul id="list-pending" class="divide-y"></ul>
+                            <div id="pending-more-wrap" class="mt-2 hidden">
+                                <button id="btn-pending-more" class="px-3 py-1 rounded border text-gray-700 hover:bg-gray-50">Load More</button>
+                            </div>
                             <ul id="list-active" class="divide-y hidden"></ul>
                             <ul id="list-completed" class="divide-y hidden"></ul>
                         </div>
@@ -94,8 +108,15 @@
                 $progress = app(\App\Services\ProgressService::class)->getOrCreate(auth()->id());
                 $userLevel = (int)($progress->level ?? 1);
             @endphp
+            @php
+                $m = app(\App\Services\ExpeditionMasteryService::class)->getOrCreate(auth()->id());
+                $mb = app(\App\Services\ExpeditionMasteryService::class)->bonusesForLevel((int)$m->level);
+                $mXpMult = (float)($mb['xp_multiplier'] ?? 1.0);
+                $mExtra = (int)($mb['expedition_extra_slots'] ?? 0);
+            @endphp
             const PREM = @json(['active'=>$premActive,'xp_multiplier'=>$xpMult,'time_multiplier'=>$timeMult]);
             const USER = @json(['level'=>$userLevel]);
+            const MASTERY = @json(['level'=>(int)$m->level,'xp_multiplier'=>$mXpMult,'expedition_extra_slots'=>$mExtra]);
             const panelCatalog = document.getElementById('panel-catalog');
             const panelMy = document.getElementById('panel-my');
             const tabCatalog = document.getElementById('tab-catalog');
@@ -114,6 +135,8 @@
             const pendingFilterWrap = document.getElementById('pending-level-filter');
             const activeFilterWrap = document.getElementById('active-status-filter');
             const activeRow = document.getElementById('active-row');
+            const pendingMoreWrap = document.getElementById('pending-more-wrap');
+            const pendingMoreBtn = document.getElementById('btn-pending-more');
             let pendingLevel = 0;
             let activeFilter = 'all';
             document.getElementById('xp-refresh').addEventListener('click', () => { loadCatalog(); loadMy(); });
@@ -151,6 +174,9 @@
                 // Show combined active row (filter + claim) only on active tab
                 if (which==='active') { activeRow.classList.remove('hidden'); }
                 else { activeRow.classList.add('hidden'); }
+                // When switching to pending tab, ensure Load More visibility reflects state
+                if (which==='pending') { pendingMoreWrap.classList.toggle('hidden', !pendingHasMore); }
+                else { pendingMoreWrap.classList.add('hidden'); }
             }
             tPending.addEventListener('click',()=>setMyTab('pending'));
             tActive.addEventListener('click',()=>setMyTab('active'));
@@ -165,6 +191,18 @@
                     loadLevelMeta();
                 });
             });
+
+            async function refreshCounts(){
+                try{
+                    const res = await fetch('/api/expeditions/my-counts', { headers:{'Accept':'application/json'} });
+                    if (!res.ok) throw new Error();
+                    const js = await res.json();
+                    const c = js && js.counts ? js.counts : {};
+                    tPending.textContent = `Pending (${c.pending ?? 0})`;
+                    tActive.textContent = `Active (${c.active ?? 0})`;
+                    tCompleted.textContent = `Completed (${(c.completed_all ?? 0)})`;
+                }catch{}
+            }
 
             function fmtHMS(s){ s = parseInt(s,10)||0; const h=Math.floor(s/3600), m=Math.floor((s%3600)/60), sec=s%60; return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`; }
             function badge(text, bg, fg){ const b=document.createElement('span'); b.className=`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium ${bg} ${fg}`; b.textContent=text; return b; }
@@ -192,6 +230,10 @@
                 if (PREM && PREM.active && PREM.xp_multiplier && PREM.xp_multiplier > 1) {
                     lo = Math.max(1, Math.floor(lo * PREM.xp_multiplier));
                     hi = Math.max(lo, Math.ceil(hi * PREM.xp_multiplier));
+                }
+                if (MASTERY && MASTERY.xp_multiplier && MASTERY.xp_multiplier > 1) {
+                    lo = Math.max(1, Math.floor(lo * MASTERY.xp_multiplier));
+                    hi = Math.max(lo, Math.ceil(hi * MASTERY.xp_multiplier));
                 }
                 return [lo, hi];
             }
@@ -281,104 +323,166 @@
                 }catch(err){ const msg = (err && err.message) ? err.message : 'Failed to buy'; Swal.fire({ icon:'error', title: msg }); }
             });
 
-            async function loadMy(){
-                listPending.innerHTML=''; listActive.innerHTML=''; listCompleted.innerHTML='';
+            let pendingPage = 1;
+            let pendingHasMore = false;
+            let pendingLoading = false;
+
+            function buildBadges(lvl, r){
+                const dur = r.duration_seconds ? fmtHMS(r.duration_seconds) : '-';
+                const badges = document.createElement('div'); badges.className='mt-0.5 flex items-center gap-3 text-xs text-gray-600';
+                const lblDur = document.createElement('span'); lblDur.textContent = 'Duration';
+                const lblXp = document.createElement('span'); lblXp.textContent = 'Est. XP';
+                const lblTm = document.createElement('span'); lblTm.textContent = 'Est. Time';
+                const dot = document.createElement('span'); dot.textContent = '•'; dot.className='text-gray-400';
+                badges.appendChild(lblDur);
+                badges.appendChild(badge(`${dur}`,'bg-indigo-100','text-indigo-700'));
+                badges.appendChild(dot);
+                badges.appendChild(lblXp);
+                const xpMM = estXp(lvl, r.duration_seconds||0, r.expedition?.cost_seconds||0, r.expedition?.energy_cost_pct||0);
+                badges.appendChild(badge(`${xpMM[0]}–${xpMM[1]}`,'bg-emerald-100','text-emerald-700'));
+                badges.appendChild(dot.cloneNode(true));
+                badges.appendChild(lblTm);
+                const tmMM = estTime(lvl, r.duration_seconds||0, r.expedition?.cost_seconds||0, r.expedition?.energy_cost_pct||0);
+                badges.appendChild(badge(`${tmMM[0]}–${tmMM[1]}s`,'bg-amber-100','text-amber-700'));
+                return badges;
+            }
+
+            async function loadPendingPaginated(reset=false){
+                if (pendingLoading) return;
+                pendingLoading = true;
+                if (reset){ listPending.innerHTML=''; pendingPage = 1; pendingHasMore = false; }
+                myStatus.textContent = 'Loading pending...';
                 try{
-                    const res = await fetch('/api/expeditions/my', { headers:{'Accept':'application/json'} });
+                    const params = new URLSearchParams();
+                    params.set('status','pending');
+                    if (pendingLevel>=1 && pendingLevel<=5) params.set('level', String(pendingLevel));
+                    params.set('page', String(pendingPage));
+                    params.set('per_page','50');
+                    const res = await fetch(`/api/expeditions/my?${params.toString()}`, { headers:{'Accept':'application/json'} });
                     if (!res.ok) throw new Error();
-                    const rows = await res.json();
-                    let cP=0,cA=0,cC=0;
-                    let finishedCount=0;
-                    for (const r of rows){
+                    const json = await res.json();
+                    const data = Array.isArray(json) ? json : (json.data || []);
+                    for (const r of data){
                         const lvl = r.expedition?.level || 0;
-                        const li = document.createElement('li'); li.className='py-3';
+                        if (pendingLevel && lvl !== pendingLevel) { continue; }
                         const name = r.expedition?.name || '(unknown)';
-                        const meta = document.createElement('div'); meta.className='text-xs text-gray-500';
-                        const dur = r.duration_seconds ? fmtHMS(r.duration_seconds) : '-';
-                        // badges row
-                        const badges = document.createElement('div'); badges.className='mt-0.5 flex items-center gap-3 text-xs text-gray-600';
-                        const lblDur = document.createElement('span'); lblDur.textContent = 'Duration';
-                        const lblXp = document.createElement('span'); lblXp.textContent = 'Est. XP';
-                        const lblTm = document.createElement('span'); lblTm.textContent = 'Est. Time';
-                        const dot = document.createElement('span'); dot.textContent = '•'; dot.className='text-gray-400';
-                        badges.appendChild(lblDur);
-                        badges.appendChild(badge(`${dur}`,'bg-indigo-100','text-indigo-700'));
-                        badges.appendChild(dot);
-                        badges.appendChild(lblXp);
-                        const xpMM = estXp(lvl, r.duration_seconds||0, r.expedition?.cost_seconds||0, r.expedition?.energy_cost_pct||0);
-                        badges.appendChild(badge(`${xpMM[0]}–${xpMM[1]}`,'bg-emerald-100','text-emerald-700'));
-                        badges.appendChild(dot.cloneNode(true));
-                        badges.appendChild(lblTm);
-                        const tmMM = estTime(lvl, r.duration_seconds||0, r.expedition?.cost_seconds||0, r.expedition?.energy_cost_pct||0);
-                        badges.appendChild(badge(`${tmMM[0]}–${tmMM[1]}s`,'bg-amber-100','text-amber-700'));
+                        const badges = buildBadges(lvl, r);
                         const title = document.createElement('div'); title.className='font-medium'; title.textContent=`${name}`;
                         const actions = document.createElement('div'); actions.className='mt-1 text-sm flex items-center gap-2 flex-wrap';
-                        if (r.status==='pending'){
-                            if (pendingLevel && lvl !== pendingLevel) { continue; }
-                            const startBtn = document.createElement('button'); startBtn.className='px-2 py-1 rounded border text-gray-700 hover:bg-gray-50'; startBtn.textContent='Start';
-                            startBtn.addEventListener('click', async ()=>{
-                                try{ 
-                                    const res = await fetch(`/api/expeditions/start/${r.id}`, { method:'POST', headers:{'Accept':'application/json','X-CSRF-TOKEN': csrf,'X-Requested-With':'XMLHttpRequest' } }); 
-                                    if (!res.ok) { const e = await res.json().catch(()=>({})); const msg = e && e.message ? e.message : 'Failed to start'; throw new Error(msg); }
-                                    await loadMy(); 
-                                }catch(err){ 
-                                    await ensureSwal(); 
-                                    Swal.fire({icon:'error', title: (err && err.message) ? err.message : 'Failed to start'}); 
-                                }
-                            });
-                            actions.appendChild(startBtn); const wrap=document.createElement('div'); wrap.appendChild(title); wrap.appendChild(badges); wrap.appendChild(actions); const li2=document.createElement('li'); li2.className='py-3'; li2.appendChild(wrap); listPending.appendChild(li2); cP++;
-                        } else if (r.status==='active'){
-                            const ends = r.ends_at ? new Date(r.ends_at) : null;
-                            const eta = document.createElement('div'); eta.className='text-xs text-gray-500'; eta.textContent = ends ? (`Ends at: ${ends.toLocaleString()}`) : '';
-                            if (ends && Date.now() >= ends.getTime()) finishedCount++;
-                            // filter active
-                            const isFinished = !!(ends && Date.now() >= ends.getTime());
-                            if (activeFilter==='progress' && isFinished) { continue; }
-                            if (activeFilter==='finished' && !isFinished) { continue; }
-                            // progress bar
-                            const started = r.started_at ? new Date(r.started_at) : null;
-                            const progWrap = document.createElement('div'); progWrap.className='mt-1';
-                            const progMeta = document.createElement('div'); progMeta.className='flex justify-between text-xs text-gray-600';
-                            const progLbl = document.createElement('span'); progLbl.textContent = 'Progress';
-                            const progPct = document.createElement('span'); progPct.className='exp-progress-label'; progPct.textContent='0%';
-                            progMeta.appendChild(progLbl); progMeta.appendChild(progPct);
-                            const progOuter = document.createElement('div'); progOuter.className='w-full bg-gray-200 rounded-full h-2 overflow-hidden';
-                            const progInner = document.createElement('div'); progInner.className='exp-progress-bar h-2 bg-gradient-to-r from-indigo-500 to-fuchsia-500'; progInner.style.width='0%';
-                            const prog = document.createElement('div'); prog.className='exp-progress'; prog.setAttribute('data-start', started ? started.getTime() : '0'); prog.setAttribute('data-end', ends ? ends.getTime() : '0');
-                            progOuter.appendChild(progInner); prog.appendChild(progMeta); prog.appendChild(progOuter); progWrap.appendChild(prog);
-                            const claimBtn = document.createElement('button'); claimBtn.className='px-2 py-1 rounded border text-gray-700 hover:bg-gray-50'; claimBtn.textContent='Claim';
-                            claimBtn.addEventListener('click', async ()=>{
-                                try{ 
-                                    const res = await fetch(`/api/expeditions/claim/${r.id}`, { method:'POST', headers:{'Accept':'application/json','X-CSRF-TOKEN': csrf,'X-Requested-With':'XMLHttpRequest' } }); 
-                                    if (!res.ok) { const e = await res.json().catch(()=>({})); const msg = e && e.message ? e.message : 'Failed to claim'; throw new Error(msg); }
-                                    await loadMy(); await ensureSwal(); Swal.fire({icon:'success', title:'Claimed'}); 
-                                }catch(err){ await ensureSwal(); Swal.fire({icon:'error', title: (err && err.message) ? err.message : 'Failed to claim'}); }
-                            });
-                            const wrap=document.createElement('div'); wrap.appendChild(title); wrap.appendChild(badges); wrap.appendChild(eta); wrap.appendChild(progWrap); wrap.appendChild(actions); actions.appendChild(claimBtn); const li2=document.createElement('li'); li2.className='py-3'; li2.appendChild(wrap); listActive.appendChild(li2); cA++;
-                        } else if (r.status==='completed' || r.status==='claimed'){
-                            const wrap=document.createElement('div');
-                            wrap.appendChild(title);
-                            wrap.appendChild(badges);
-                            // Loot summary for claimed expeditions
-                            if (r.status==='claimed'){
-                                const lootArr = Array.isArray(r.loot) ? r.loot : [];
-                                const lootDiv = document.createElement('div'); lootDiv.className='text-xs text-gray-600 mt-0.5';
-                                if (lootArr.length>0){
-                                    const parts = lootArr.map(x => `${x.name || x.key || 'Item'} x${x.qty||1}`);
-                                    lootDiv.textContent = `Loot: ${parts.join(', ')}`;
-                                } else {
-                                    lootDiv.textContent = 'Loot: (none)';
-                                }
-                                wrap.appendChild(lootDiv);
-                            }
-                            const li2=document.createElement('li'); li2.className='py-3'; li2.appendChild(wrap); listCompleted.appendChild(li2); cC++;
-                        }
+                        const startBtn = document.createElement('button'); startBtn.className='px-2 py-1 rounded border text-gray-700 hover:bg-gray-50'; startBtn.textContent='Start';
+                        startBtn.addEventListener('click', async ()=>{
+                            try{ 
+                                const res = await fetch(`/api/expeditions/start/${r.id}`, { method:'POST', headers:{'Accept':'application/json','X-CSRF-TOKEN': csrf,'X-Requested-With':'XMLHttpRequest' } }); 
+                                if (!res.ok) { const e = await res.json().catch(()=>({})); const msg = e && e.message ? e.message : 'Failed to start'; throw new Error(msg); }
+                                await loadMy(); 
+                            }catch(err){ await ensureSwal(); Swal.fire({icon:'error', title: (err && err.message) ? err.message : 'Failed to start'}); }
+                        });
+                        actions.appendChild(startBtn);
+                        const wrap=document.createElement('div'); wrap.appendChild(title); wrap.appendChild(badges); wrap.appendChild(actions);
+                        const li2=document.createElement('li'); li2.className='py-3'; li2.appendChild(wrap); listPending.appendChild(li2);
                     }
-                    tPending.textContent = `Pending (${cP})`; tActive.textContent=`Active (${cA})`; tCompleted.textContent=`Completed (${cC})`;
+                    // update count label by counting DOM nodes
+                    tPending.textContent = `Pending (${listPending.children.length})`;
+                    // has more?
+                    if (Array.isArray(json)) { pendingHasMore = false; }
+                    else { pendingHasMore = !!json.next_page_url; }
+                    pendingMoreWrap.classList.toggle('hidden', !pendingHasMore);
+                    if (pendingHasMore) pendingPage += 1;
+                    myStatus.textContent='';
+                }catch(e){ myStatus.textContent='Unable to load pending'; }
+                finally{ pendingLoading = false; }
+            }
+
+            async function loadActive(){
+                listActive.innerHTML='';
+                let cA=0, finishedCount=0;
+                try{
+                    const res = await fetch('/api/expeditions/my?status=active&per_page=100', { headers:{'Accept':'application/json'} });
+                    if (!res.ok) throw new Error();
+                    const json = await res.json();
+                    const rows = Array.isArray(json) ? json : (json.data||[]);
+                    for (const r of rows){
+                        const lvl = r.expedition?.level || 0;
+                        const name = r.expedition?.name || '(unknown)';
+                        const badges = buildBadges(lvl, r);
+                        const ends = r.ends_at ? new Date(r.ends_at) : null;
+                        const eta = document.createElement('div'); eta.className='text-xs text-gray-500'; eta.textContent = ends ? (`Ends at: ${ends.toLocaleString()}`) : '';
+                        if (ends && Date.now() >= ends.getTime()) finishedCount++;
+                        const isFinished = !!(ends && Date.now() >= ends.getTime());
+                        if (activeFilter==='progress' && isFinished) { continue; }
+                        if (activeFilter==='finished' && !isFinished) { continue; }
+                        const started = r.started_at ? new Date(r.started_at) : null;
+                        const progWrap = document.createElement('div'); progWrap.className='mt-1';
+                        const progMeta = document.createElement('div'); progMeta.className='flex justify-between text-xs text-gray-600';
+                        const progLbl = document.createElement('span'); progLbl.textContent = 'Progress';
+                        const progPct = document.createElement('span'); progPct.className='exp-progress-label'; progPct.textContent='0%';
+                        progMeta.appendChild(progLbl); progMeta.appendChild(progPct);
+                        const progOuter = document.createElement('div'); progOuter.className='w-full bg-gray-200 rounded-full h-2 overflow-hidden';
+                        const progInner = document.createElement('div'); progInner.className='exp-progress-bar h-2 bg-gradient-to-r from-indigo-500 to-fuchsia-500'; progInner.style.width='0%';
+                        const prog = document.createElement('div'); prog.className='exp-progress'; prog.setAttribute('data-start', started ? started.getTime() : '0'); prog.setAttribute('data-end', ends ? ends.getTime() : '0');
+                        progOuter.appendChild(progInner); prog.appendChild(progMeta); prog.appendChild(progOuter); progWrap.appendChild(prog);
+                        const actions = document.createElement('div'); actions.className='mt-1 text-sm flex items-center gap-2 flex-wrap';
+                        const claimBtn = document.createElement('button'); claimBtn.className='px-2 py-1 rounded border text-gray-700 hover:bg-gray-50'; claimBtn.textContent='Claim';
+                        claimBtn.addEventListener('click', async ()=>{
+                            try{ 
+                                const res = await fetch(`/api/expeditions/claim/${r.id}`, { method:'POST', headers:{'Accept':'application/json','X-CSRF-TOKEN': csrf,'X-Requested-With':'XMLHttpRequest' } }); 
+                                if (!res.ok) { const e = await res.json().catch(()=>({})); const msg = e && e.message ? e.message : 'Failed to claim'; throw new Error(msg); }
+                                await loadMy(); await ensureSwal(); Swal.fire({icon:'success', title:'Claimed'}); 
+                            }catch(err){ await ensureSwal(); Swal.fire({icon:'error', title: (err && err.message) ? err.message : 'Failed to claim'}); }
+                        });
+                        const wrap=document.createElement('div'); wrap.appendChild(document.createElement('div')).className='';
+                        const title = document.createElement('div'); title.className='font-medium'; title.textContent = name;
+                        const container = document.createElement('div'); container.appendChild(title); container.appendChild(badges); container.appendChild(eta); container.appendChild(progWrap);
+                        actions.appendChild(claimBtn); container.appendChild(actions);
+                        const li2=document.createElement('li'); li2.className='py-3'; li2.appendChild(container); listActive.appendChild(li2);
+                        cA++;
+                    }
+                    tActive.textContent = `Active (${cA})`;
                     const claimAllBtn = document.getElementById('btn-claim-all');
                     if (claimAllBtn) claimAllBtn.disabled = finishedCount<=0;
-                    myStatus.textContent='';
-                }catch(e){ myStatus.textContent='Unable to load expeditions'; }
+                }catch(e){ /* ignore */ }
+            }
+
+            async function loadCompleted(){
+                listCompleted.innerHTML='';
+                let cC=0;
+                try{
+                    const res = await fetch('/api/expeditions/my?status=completed&per_page=100', { headers:{'Accept':'application/json'} });
+                    if (!res.ok) throw new Error();
+                    const json = await res.json();
+                    const rows = Array.isArray(json) ? json : (json.data||[]);
+                    for (const r of rows){
+                        const lvl = r.expedition?.level || 0;
+                        const name = r.expedition?.name || '(unknown)';
+                        const badges = buildBadges(lvl, r);
+                        const wrap=document.createElement('div');
+                        wrap.appendChild(document.createElement('div'));
+                        const title = document.createElement('div'); title.className='font-medium'; title.textContent = name;
+                        const container = document.createElement('div'); container.appendChild(title); container.appendChild(badges);
+                        if (r.status==='claimed'){
+                            const lootArr = Array.isArray(r.loot) ? r.loot : [];
+                            const lootDiv = document.createElement('div'); lootDiv.className='text-xs text-gray-600 mt-0.5';
+                            if (lootArr.length>0){
+                                const parts = lootArr.map(x => `${x.name || x.key || 'Item'} x${x.qty||1}`);
+                                lootDiv.textContent = `Loot: ${parts.join(', ')}`;
+                            } else {
+                                lootDiv.textContent = 'Loot: (none)';
+                            }
+                            container.appendChild(lootDiv);
+                        }
+                        const li2=document.createElement('li'); li2.className='py-3'; li2.appendChild(container); listCompleted.appendChild(li2); cC++;
+                    }
+                    tCompleted.textContent = `Completed (${cC})`;
+                }catch(e){ /* ignore */ }
+            }
+
+            async function loadMy(){
+                listPending.innerHTML=''; listActive.innerHTML=''; listCompleted.innerHTML='';
+                await loadPendingPaginated(true);
+                await loadActive();
+                await loadCompleted();
+                myStatus.textContent='';
+                refreshCounts();
             }
 
             // Claim all finished
@@ -403,7 +507,7 @@
                 pendingLevel = parseInt(btn.getAttribute('data-plvl'),10)||0;
                 document.querySelectorAll('.plvl-btn').forEach(x=>x.classList.remove('bg-indigo-50','text-indigo-700'));
                 btn.classList.add('bg-indigo-50','text-indigo-700');
-                loadMy();
+                loadPendingPaginated(true);
             });
 
             // Active status filter behavior
@@ -419,6 +523,10 @@
             setTopTab('catalog'); setMyTab('pending');
             loadLevelMeta(); loadMy();
             setInterval(updateAllProgress, 1000);
+            refreshCounts();
+
+            // Load more pending
+            if (pendingMoreBtn){ pendingMoreBtn.addEventListener('click', ()=> loadPendingPaginated(false)); }
         })();
     </script>
 </x-app-layout>

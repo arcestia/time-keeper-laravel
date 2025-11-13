@@ -32,6 +32,8 @@ Route::middleware('auth')->group(function () {
     Route::post('/bank/deposit', [BankController::class, 'deposit'])->name('bank.deposit');
     Route::post('/bank/withdraw', [BankController::class, 'withdraw'])->name('bank.withdraw');
     Route::post('/bank/transfer', [BankController::class, 'transfer'])->name('bank.transfer');
+    Route::post('/bank/exchange-tokens', [BankController::class, 'exchangeTokens'])->name('bank.exchange_tokens');
+    Route::get('/bank/token-balances', [BankController::class, 'tokenBalances'])->name('bank.token_balances');
 
     // Player stats
     Route::get('/api/me/stats', [StatsController::class, 'me'])->name('stats.me');
@@ -92,6 +94,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/expeditions', [ExpeditionController::class, 'page'])->name('expeditions.page');
     Route::get('/api/expeditions', [ExpeditionController::class, 'catalog'])->name('expeditions.catalog');
     Route::get('/api/expeditions/my', [ExpeditionController::class, 'my'])->name('expeditions.my');
+    Route::get('/api/expeditions/my-counts', [ExpeditionController::class, 'myCounts'])->name('expeditions.my_counts');
     Route::post('/api/expeditions/buy/{id}', [ExpeditionController::class, 'buy'])->name('expeditions.buy');
     Route::post('/api/expeditions/buy-level', [ExpeditionController::class, 'buyLevel'])->name('expeditions.buylevel');
     Route::post('/api/expeditions/start/{id}', [ExpeditionController::class, 'start'])->name('expeditions.start');
