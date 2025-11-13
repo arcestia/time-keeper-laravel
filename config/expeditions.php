@@ -22,6 +22,10 @@ return [
     'cost_weight' => 0.00005,       // per second of cost
     'energy_weight' => 0.004,       // per percent energy cost
     'consumable_weight' => 0.03,    // per hour of duration
+    // Ensure time rewards are profitable vs cost_seconds
+    'time_profit_margin_base' => 0.10, // +10% baseline
+    'time_profit_margin_per_level' => 0.03, // +3% per expedition level step
+    'time_profit_margin_cap' => 0.50, // cap at +50%
     'qty_per_hour' => 1,
     'qty_max' => 16,
     'level_qty_bands' => [

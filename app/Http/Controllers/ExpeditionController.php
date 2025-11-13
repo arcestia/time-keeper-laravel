@@ -86,6 +86,13 @@ class ExpeditionController extends Controller
                 $timeRaw = (int) ($level * (int)$cfg['time_per_level'] + $hours * (int)$cfg['time_per_hour']);
                 // apply same multiplier to time
                 $timeRaw = (int) floor($timeRaw * $mult);
+                // ensure profitability vs cost_seconds
+                $baseMargin = (float) ($cfg['time_profit_margin_base'] ?? 0.10);
+                $perLvlMargin = (float) ($cfg['time_profit_margin_per_level'] ?? 0.03);
+                $capMargin = (float) ($cfg['time_profit_margin_cap'] ?? 0.50);
+                $effMargin = min($capMargin, $baseMargin + max(0, $level - 1) * $perLvlMargin);
+                $minTime = (int) ceil($costSec * (1.0 + $effMargin));
+                if ($timeRaw < $minTime) { $timeRaw = $minTime; }
                 $timeRoll = (int) random_int((int) floor($timeRaw * $xpVar), (int) ceil($timeRaw * $xpVarMax));
                 if (PremiumService::isActive($prem)) {
                     $tier = PremiumService::tierFor((int)$prem->premium_seconds_accumulated);
@@ -317,6 +324,13 @@ class ExpeditionController extends Controller
             $timeRaw = (int) ($level * (int)$cfg['time_per_level'] + $hours * (int)$cfg['time_per_hour']);
             // apply same multiplier to time
             $timeRaw = (int) floor($timeRaw * $mult);
+            // ensure profitability vs cost_seconds
+            $baseMargin = (float) ($cfg['time_profit_margin_base'] ?? 0.10);
+            $perLvlMargin = (float) ($cfg['time_profit_margin_per_level'] ?? 0.03);
+            $capMargin = (float) ($cfg['time_profit_margin_cap'] ?? 0.50);
+            $effMargin = min($capMargin, $baseMargin + max(0, $level - 1) * $perLvlMargin);
+            $minTime = (int) ceil($costSec * (1.0 + $effMargin));
+            if ($timeRaw < $minTime) { $timeRaw = $minTime; }
             $time = (int) random_int((int) floor($timeRaw * $xpVar), (int) ceil($timeRaw * $xpVarMax));
             if (PremiumService::isActive($prem)) {
                 $tier = PremiumService::tierFor((int)$prem->premium_seconds_accumulated);

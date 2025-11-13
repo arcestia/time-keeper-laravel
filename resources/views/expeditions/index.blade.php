@@ -169,18 +169,24 @@
             function fmtHMS(s){ s = parseInt(s,10)||0; const h=Math.floor(s/3600), m=Math.floor((s%3600)/60), sec=s%60; return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`; }
             function badge(text, bg, fg){ const b=document.createElement('span'); b.className=`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium ${bg} ${fg}`; b.textContent=text; return b; }
             function clamp01(x){ return Math.max(0, Math.min(1, x)); }
-            function estXp(level, seconds){
+            function estXp(level, seconds, costSec=0, energyPct=0){
                 const h = Math.max(1, Math.ceil((parseInt(seconds,10)||0)/3600));
-                const lvl = Math.max(1, parseInt(level,10)||1); // expedition level
-                const uLvl = Math.max(1, parseInt(USER?.level||1,10)); // user level
+                const lvl = Math.max(1, parseInt(level,10)||1);
+                const uLvl = Math.max(1, parseInt(USER?.level||1,10));
                 const base = EXP_CFG.xp_per_hour_base ?? 10;
                 const perLv = EXP_CFG.xp_per_hour_per_level ?? 1.2;
                 const perUserLv = EXP_CFG.xp_per_hour_per_user_level ?? 1.5;
-                const raw = (
+                let raw = (
                     (lvl * (EXP_CFG.xp_per_level ?? 12))
                     + (uLvl * (EXP_CFG.xp_per_user_level ?? 10))
                     + (h * (base + lvl * perLv + uLvl * perUserLv))
                 );
+                const levMult = (EXP_CFG.level_multipliers||{})[lvl] ?? 1.0;
+                const costW = EXP_CFG.cost_weight ?? 0.0;
+                const energyW = EXP_CFG.energy_weight ?? 0.0;
+                const consW = EXP_CFG.consumable_weight ?? 0.0;
+                const mult = Math.max(1.0, levMult * (1.0 + (Number(costSec)||0)*costW + (Number(energyPct)||0)*energyW + h*consW));
+                raw = Math.floor(raw * mult);
                 const vmin = EXP_CFG.variance_min || 0.9, vmax = Math.max(EXP_CFG.variance_max||1.2, vmin);
                 let lo = Math.floor(raw * vmin), hi = Math.ceil(raw * vmax);
                 if (PREM && PREM.active && PREM.xp_multiplier && PREM.xp_multiplier > 1) {
@@ -189,9 +195,22 @@
                 }
                 return [lo, hi];
             }
-            function estTime(level, seconds){
+            function estTime(level, seconds, costSec=0, energyPct=0){
                 const h = Math.max(1, Math.ceil((parseInt(seconds,10)||0)/3600));
-                const raw = (level * (EXP_CFG.time_per_level||36)) + (h * (EXP_CFG.time_per_hour||15));
+                const lvl = Math.max(1, parseInt(level,10)||1);
+                let raw = (lvl * (EXP_CFG.time_per_level||36)) + (h * (EXP_CFG.time_per_hour||15));
+                const levMult = (EXP_CFG.level_multipliers||{})[lvl] ?? 1.0;
+                const costW = EXP_CFG.cost_weight ?? 0.0;
+                const energyW = EXP_CFG.energy_weight ?? 0.0;
+                const consW = EXP_CFG.consumable_weight ?? 0.0;
+                const mult = Math.max(1.0, levMult * (1.0 + (Number(costSec)||0)*costW + (Number(energyPct)||0)*energyW + h*consW));
+                raw = Math.floor(raw * mult);
+                const baseMargin = EXP_CFG.time_profit_margin_base ?? 0.10;
+                const perLvlMargin = EXP_CFG.time_profit_margin_per_level ?? 0.03;
+                const capMargin = EXP_CFG.time_profit_margin_cap ?? 0.50;
+                const effMargin = Math.min(capMargin, baseMargin + Math.max(0, lvl-1) * perLvlMargin);
+                const minTime = Math.ceil((Number(costSec)||0) * (1 + effMargin));
+                if (raw < minTime) raw = minTime;
                 const vmin = EXP_CFG.variance_min || 0.9, vmax = Math.max(EXP_CFG.variance_max||1.2, vmin);
                 let lo = Math.floor(raw * vmin), hi = Math.ceil(raw * vmax);
                 if (PREM && PREM.active && PREM.time_multiplier && PREM.time_multiplier > 1) {
@@ -230,10 +249,10 @@
                     const e = Array.isArray(data) && data[0] ? data[0] : null;
                     if (!e){ catStatus.textContent='No expeditions found'; levelMeta.textContent = `Level ${currentLevel} • Duration: - • Cost: - • Energy: -`; return; }
                     catStatus.textContent='';
-                    const xpMinMax = estXp(currentLevel, e.min_duration_seconds);
-                    const xpMaxMax = estXp(currentLevel, e.max_duration_seconds);
-                    const tMinMax = estTime(currentLevel, e.min_duration_seconds);
-                    const tMaxMax = estTime(currentLevel, e.max_duration_seconds);
+                    const xpMinMax = estXp(currentLevel, e.min_duration_seconds, e.cost_seconds, e.energy_cost_pct);
+                    const xpMaxMax = estXp(currentLevel, e.max_duration_seconds, e.cost_seconds, e.energy_cost_pct);
+                    const tMinMax = estTime(currentLevel, e.min_duration_seconds, e.cost_seconds, e.energy_cost_pct);
+                    const tMaxMax = estTime(currentLevel, e.max_duration_seconds, e.cost_seconds, e.energy_cost_pct);
                     const qMin = estItemQty(currentLevel, e.min_duration_seconds);
                     const qMax = estItemQty(currentLevel, e.max_duration_seconds);
                     levelMeta.textContent = `Level ${currentLevel} • Duration: ${fmtHMS(e.min_duration_seconds)} - ${fmtHMS(e.max_duration_seconds)} • Cost: ${fmtHMS(e.cost_seconds)} • Energy: -${e.energy_cost_pct}% • Est. XP: ${xpMinMax[0]}–${xpMaxMax[1]} • Est. Time: ${tMinMax[0]}–${tMaxMax[1]} sec • Est. item qty per drop: ${qMin[0]}–${qMax[1]}`;
@@ -286,11 +305,11 @@
                         badges.appendChild(badge(`${dur}`,'bg-indigo-100','text-indigo-700'));
                         badges.appendChild(dot);
                         badges.appendChild(lblXp);
-                        const xpMM = estXp(lvl, r.duration_seconds||0);
+                        const xpMM = estXp(lvl, r.duration_seconds||0, r.expedition?.cost_seconds||0, r.expedition?.energy_cost_pct||0);
                         badges.appendChild(badge(`${xpMM[0]}–${xpMM[1]}`,'bg-emerald-100','text-emerald-700'));
                         badges.appendChild(dot.cloneNode(true));
                         badges.appendChild(lblTm);
-                        const tmMM = estTime(lvl, r.duration_seconds||0);
+                        const tmMM = estTime(lvl, r.duration_seconds||0, r.expedition?.cost_seconds||0, r.expedition?.energy_cost_pct||0);
                         badges.appendChild(badge(`${tmMM[0]}–${tmMM[1]}s`,'bg-amber-100','text-amber-700'));
                         const title = document.createElement('div'); title.className='font-medium'; title.textContent=`${name}`;
                         const actions = document.createElement('div'); actions.className='mt-1 text-sm flex items-center gap-2 flex-wrap';
