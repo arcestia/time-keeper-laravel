@@ -155,8 +155,12 @@
                         headers: { 'Accept':'application/json','Content-Type':'application/json','X-Requested-With':'XMLHttpRequest','X-CSRF-TOKEN': csrf },
                         body: JSON.stringify({ key: String(body.key||''), qty: Math.max(1, parseInt(body.qty,10)||1) })
                     });
-                    if (!res.ok) throw new Error();
                     const d = await res.json().catch(() => ({}));
+                    if (!res.ok) {
+                        const msg = (d && (d.message || d.error)) ? String(d.message || d.error) : 'Action failed';
+                        status.textContent = msg;
+                        return;
+                    }
                     if (d && d.moved) {
                         status.textContent = `Moved ${d.moved}`;
                     } else {
@@ -181,7 +185,8 @@
                     const stoTotal = sto.reduce((s,e) => s + (parseInt(e.quantity,10)||0), 0);
                     tabInv.textContent = `Inventory (${invTotal})`;
                     tabSto.textContent = `Storage (${stoTotal})`;
-                    invMeta.textContent = `Inventory total: ${invTotal.toLocaleString()} • Global cap: 20,000`;
+                    const cap = Number(d.cap || 20000);
+                    invMeta.textContent = `Inventory total: ${invTotal.toLocaleString()} • Global cap: ${cap.toLocaleString()}`;
 
                     if (inv.length === 0) invList.innerHTML = '<li class="py-2 text-sm text-gray-500">No items in inventory</li>';
                     else inv.forEach(e => invList.appendChild(row(e, 'inv')));

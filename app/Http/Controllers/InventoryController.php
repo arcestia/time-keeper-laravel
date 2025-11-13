@@ -25,6 +25,7 @@ class InventoryController extends Controller
         return response()->json([
             'inventory' => $inv,
             'storage' => $sto,
+            'cap' => (int) config('inventory.cap', 20000),
         ]);
     }
 
@@ -52,14 +53,14 @@ class InventoryController extends Controller
         $req = request();
         $key = (string) $req->input('key');
         $qty = max(1, (int) ($req->input('qty', 1)));
-        $INV_MAX = 20000;
+        $INV_MAX = (int) config('inventory.cap', 20000);
         return DB::transaction(function() use($userId,$key,$qty,$INV_MAX){
             $item = StoreItem::where(['key'=>$key])->firstOrFail();
             $sto = UserStorageItem::where(['user_id'=>$userId,'store_item_id'=>$item->id])->lockForUpdate()->first();
             if (!$sto || $sto->quantity < $qty) { abort(422,'Not enough quantity in storage'); }
             // Global cap across all inventory items
             $invTotal = (int) UserInventoryItem::where('user_id',$userId)->lockForUpdate()->sum('quantity');
-            if ($invTotal + $qty > $INV_MAX) { abort(422, 'Inventory capacity reached (global max 20,000)'); }
+            if ($invTotal + $qty > $INV_MAX) { abort(422, 'Inventory capacity reached (global max ' . $INV_MAX . ')'); }
             $inv = UserInventoryItem::where(['user_id'=>$userId,'store_item_id'=>$item->id])->lockForUpdate()->first();
             if (!$inv) { $inv = UserInventoryItem::create(['user_id'=>$userId,'store_item_id'=>$item->id,'quantity'=>0]); }
             $inv->quantity = (int)$inv->quantity + $qty;

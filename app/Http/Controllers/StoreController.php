@@ -71,13 +71,13 @@ class StoreController extends Controller
             $price = $pricePer * $qty;
 
             // Enforce GLOBAL inventory capacity pre-check (no overflow into storage)
-            $INV_MAX = 20000;
+            $INV_MAX = (int) config('inventory.cap', 20000);
             // lock all user's inventory rows by summing within transaction
             $invTotal = (int) \App\Models\UserInventoryItem::query()->where('user_id',$user->id)->lockForUpdate()->sum('quantity');
             if ($invTotal + $qty > $INV_MAX) {
-                Flasher::addError('Inventory capacity reached (global max 20,000). Reduce quantity.');
-                session()->flash('error', 'Inventory capacity reached (global max 20,000).');
-                abort(422, 'Inventory capacity reached');
+                Flasher::addError('Inventory capacity reached (global max ' . $INV_MAX . '). Reduce quantity.');
+                session()->flash('error', 'Inventory capacity reached (global max ' . $INV_MAX . ').');
+                abort(422, 'Inventory capacity reached (global max ' . $INV_MAX . ')');
             }
             $inv = \App\Models\UserInventoryItem::query()->where(['user_id'=>$user->id,'store_item_id'=>$lockedItem->id])->lockForUpdate()->first();
             $paidFrom = $source;
