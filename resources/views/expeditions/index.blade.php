@@ -82,6 +82,15 @@
         (() => {
             const csrf = document.querySelector('meta[name="csrf-token"]').getAttribute('content') || '';
             const EXP_CFG = @json(config('expeditions'));
+            @php
+                $prem = \App\Services\PremiumService::getOrCreate(auth()->id());
+                $premActive = \App\Services\PremiumService::isActive($prem);
+                $premTier = $premActive ? \App\Services\PremiumService::tierFor((int)$prem->premium_seconds_accumulated) : 0;
+                $premBenefits = $premActive ? \App\Services\PremiumService::benefitsForTier($premTier) : [];
+                $xpMult = (float)($premBenefits['xp_multiplier'] ?? 1.0);
+                $timeMult = (float)($premBenefits['time_multiplier'] ?? 1.0);
+            @endphp
+            const PREM = @json(['active'=>$premActive,'xp_multiplier'=>$xpMult,'time_multiplier'=>$timeMult]);
             const panelCatalog = document.getElementById('panel-catalog');
             const panelMy = document.getElementById('panel-my');
             const tabCatalog = document.getElementById('tab-catalog');
@@ -162,13 +171,23 @@
                 const perLv = EXP_CFG.xp_per_hour_per_level ?? 1.2;
                 const raw = (lvl * (EXP_CFG.xp_per_level ?? 12)) + (h * (base + lvl * perLv));
                 const vmin = EXP_CFG.variance_min || 0.9, vmax = Math.max(EXP_CFG.variance_max||1.2, vmin);
-                return [Math.floor(raw * vmin), Math.ceil(raw * vmax)];
+                let lo = Math.floor(raw * vmin), hi = Math.ceil(raw * vmax);
+                if (PREM && PREM.active && PREM.xp_multiplier && PREM.xp_multiplier > 1) {
+                    lo = Math.max(1, Math.floor(lo * PREM.xp_multiplier));
+                    hi = Math.max(lo, Math.ceil(hi * PREM.xp_multiplier));
+                }
+                return [lo, hi];
             }
             function estTime(level, seconds){
                 const h = Math.max(1, Math.ceil((parseInt(seconds,10)||0)/3600));
                 const raw = (level * (EXP_CFG.time_per_level||36)) + (h * (EXP_CFG.time_per_hour||15));
                 const vmin = EXP_CFG.variance_min || 0.9, vmax = Math.max(EXP_CFG.variance_max||1.2, vmin);
-                return [Math.floor(raw * vmin), Math.ceil(raw * vmax)];
+                let lo = Math.floor(raw * vmin), hi = Math.ceil(raw * vmax);
+                if (PREM && PREM.active && PREM.time_multiplier && PREM.time_multiplier > 1) {
+                    lo = Math.max(0, Math.floor(lo * PREM.time_multiplier));
+                    hi = Math.max(lo, Math.ceil(hi * PREM.time_multiplier));
+                }
+                return [lo, hi];
             }
             function estItemQty(level, seconds){
                 const band = (EXP_CFG.level_qty_bands||{})[level] || [1,2];

@@ -33,6 +33,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Expeditions: Increased XP scaling (raised xp_per_level to 15 and xp_per_hour to 6) to better outpace short Travel steps.
 - Expeditions: Adopted Option B XP formula: `level*xp_per_level + hours*(xp_per_hour_base + level*xp_per_hour_per_level)`. Added `xp_per_hour_base` and `xp_per_hour_per_level` config keys and updated Expeditions view estimators to match.
 - Expeditions: Increased passive XP strength at higher levels (xp_per_hour_base 10→12, xp_per_hour_per_level 1.2→1.5).
+- Expeditions: View estimates now auto-apply premium multipliers when active (XP and Time).
 ### Database
 - Added migration to add unique `username` column to `users` table and make `email` nullable.
 - Note: Existing users will need a `username` value to log in.
