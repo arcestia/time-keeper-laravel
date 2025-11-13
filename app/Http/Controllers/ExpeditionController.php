@@ -41,39 +41,63 @@ class ExpeditionController extends Controller
                 if (!$ue || $ue->status !== 'active' || !$ue->ends_at || $now->lt($ue->ends_at)) { return; }
                 $ue->status = 'completed';
                 $ue->save();
-                // XP with premium multiplier
-                $xp = (int) $ue->base_xp;
+                $cfg = config('expeditions');
+                $hours = max(1, (int) ceil(((int)$ue->duration_seconds)/3600));
+                $level = (int) optional($ue->expedition)->level ?? 1;
+                $xpRaw = (int) (
+                    $level * (float)($cfg['xp_per_level'] ?? 12)
+                    + $hours * ((float)($cfg['xp_per_hour_base'] ?? 10) + $level * (float)($cfg['xp_per_hour_per_level'] ?? 1.2))
+                );
+                $xpVar = max((float)$cfg['variance_min'], 0.0);
+                $xpVarMax = max((float)$cfg['variance_max'], $xpVar);
+                $xpRoll = (int) random_int((int) floor($xpRaw * $xpVar), (int) ceil($xpRaw * $xpVarMax));
                 $prem = PremiumService::getOrCreate($user->id);
                 if (PremiumService::isActive($prem)) {
                     $tier = PremiumService::tierFor((int)$prem->premium_seconds_accumulated);
                     $benefits = PremiumService::benefitsForTier($tier);
                     $mult = (float)($benefits['xp_multiplier'] ?? 1.0);
-                    if ($mult > 1.0) { $xp = max(1, (int) floor($xp * $mult)); }
+                    if ($mult > 1.0) { $xpRoll = max(1, (int) floor($xpRoll * $mult)); }
                 }
-                app(ProgressService::class)->addXp($user->id, $xp);
-                $totalXp += $xp; $claimed++;
+                app(ProgressService::class)->addXp($user->id, $xpRoll);
+                $totalXp += $xpRoll; $claimed++;
                 // deplete food/water
-                $hours = max(1, (int) ceil(((int)$ue->duration_seconds)/3600));
                 $deplete = min(100, $hours);
                 $stats = UserStats::where('user_id',$user->id)->lockForUpdate()->first();
                 if (!$stats) { $stats = UserStats::create(['user_id'=>$user->id,'energy'=>100,'food'=>100,'water'=>100,'leisure'=>100,'health'=>100]); }
                 $stats->food = max(0, (int)$stats->food - $deplete);
                 $stats->water = max(0, (int)$stats->water - $deplete);
                 $stats->save();
-                // loot
+                // time reward
+                $timeRaw = (int) ($level * (int)$cfg['time_per_level'] + $hours * (int)$cfg['time_per_hour']);
+                $timeRoll = (int) random_int((int) floor($timeRaw * $xpVar), (int) ceil($timeRaw * $xpVarMax));
+                if (PremiumService::isActive($prem)) {
+                    $tier = PremiumService::tierFor((int)$prem->premium_seconds_accumulated);
+                    $benefits = PremiumService::benefitsForTier($tier);
+                    $tm = (float)($benefits['time_multiplier'] ?? 1.0);
+                    if ($tm > 1.0) { $timeRoll = max(0, (int) floor($timeRoll * $tm)); }
+                }
+                $wallet = UserTimeWallet::where('user_id',$user->id)->lockForUpdate()->first();
+                if (!$wallet) { $wallet = UserTimeWallet::create(['user_id'=>$user->id,'available_seconds'=>0,'last_applied_at'=>$now,'drain_rate'=>1.000,'is_active'=>true]); }
+                $wallet->available_seconds = (int)$wallet->available_seconds + $timeRoll; $wallet->save();
+                // loot (level-based qty, send to storage)
                 $loot = [];
+                $band = $cfg['level_qty_bands'][$level] ?? [1,2];
+                $qtyPerHour = (int) $cfg['qty_per_hour'];
+                $baseMin = (int) $band[0]; $baseMax = (int) $band[1];
                 $items = StoreItem::where('is_active', true)->inRandomOrder()->limit(5)->get();
-                $count = random_int(1, min(3, max(1, $items->count())));
+                // decide number of different items by level (simple): 1..min(level,3)
+                $count = max(1, min(3, $level, $items->count()));
                 for ($i=0; $i<$count; $i++) {
                     $si = $items[$i]; if (!$si) break;
-                    $q = random_int(1, 5);
-                    $loot[] = ['key'=>$si->key,'name'=>$si->name,'qty'=>$q];
+                    $roll = random_int($baseMin, $baseMax);
+                    $qty = (int) min((int)$cfg['qty_max'], $roll + (int) floor($hours * $qtyPerHour));
+                    if ($qty <= 0) continue;
+                    $loot[] = ['key'=>$si->key,'name'=>$si->name,'qty'=>$qty];
                     $sto = UserStorageItem::where(['user_id'=>$user->id,'store_item_id'=>$si->id])->lockForUpdate()->first();
                     if (!$sto) { $sto = UserStorageItem::create(['user_id'=>$user->id,'store_item_id'=>$si->id,'quantity'=>0]); }
-                    $sto->quantity = (int)$sto->quantity + $q; $sto->save();
-                    // aggregate
+                    $sto->quantity = (int)$sto->quantity + $qty; $sto->save();
                     if (!isset($lootAgg[$si->key])) { $lootAgg[$si->key] = ['key'=>$si->key,'name'=>$si->name,'qty'=>0]; }
-                    $lootAgg[$si->key]['qty'] += $q;
+                    $lootAgg[$si->key]['qty'] += $qty;
                 }
                 $ue->loot = $loot; $ue->status = 'claimed'; $ue->save();
             });
@@ -239,8 +263,16 @@ class ExpeditionController extends Controller
             if (!$ue->ends_at || $now->lt($ue->ends_at)) { return response()->json(['ok'=>false,'message'=>'Expedition not finished yet'], 422); }
             $ue->status = 'completed';
             $ue->save();
-            // apply XP with premium multiplier
-            $xp = (int) $ue->base_xp;
+            $cfg = config('expeditions');
+            $hours = max(1, (int) ceil(((int)$ue->duration_seconds)/3600));
+            $level = (int) optional($ue->expedition)->level ?? 1;
+            $xpRaw = (int) (
+                $level * (float)($cfg['xp_per_level'] ?? 12)
+                + $hours * ((float)($cfg['xp_per_hour_base'] ?? 10) + $level * (float)($cfg['xp_per_hour_per_level'] ?? 1.2))
+            );
+            $xpVar = max((float)$cfg['variance_min'], 0.0);
+            $xpVarMax = max((float)$cfg['variance_max'], $xpVar);
+            $xp = (int) random_int((int) floor($xpRaw * $xpVar), (int) ceil($xpRaw * $xpVarMax));
             $prem = PremiumService::getOrCreate($user->id);
             if (PremiumService::isActive($prem)) {
                 $tier = PremiumService::tierFor((int)$prem->premium_seconds_accumulated);
@@ -257,13 +289,30 @@ class ExpeditionController extends Controller
             $stats->food = max(0, (int)$stats->food - $deplete);
             $stats->water = max(0, (int)$stats->water - $deplete);
             $stats->save();
-            // generate loot: 1-3 random items with small quantities; deliver to storage
+            // time reward
+            $timeRaw = (int) ($level * (int)$cfg['time_per_level'] + $hours * (int)$cfg['time_per_hour']);
+            $time = (int) random_int((int) floor($timeRaw * $xpVar), (int) ceil($timeRaw * $xpVarMax));
+            if (PremiumService::isActive($prem)) {
+                $tier = PremiumService::tierFor((int)$prem->premium_seconds_accumulated);
+                $benefits = PremiumService::benefitsForTier($tier);
+                $tm = (float)($benefits['time_multiplier'] ?? 1.0);
+                if ($tm > 1.0) { $time = max(0, (int) floor($time * $tm)); }
+            }
+            $wallet = UserTimeWallet::where('user_id',$user->id)->lockForUpdate()->first();
+            if (!$wallet) { $wallet = UserTimeWallet::create(['user_id'=>$user->id,'available_seconds'=>0,'last_applied_at'=>$now,'drain_rate'=>1.000,'is_active'=>true]); }
+            $wallet->available_seconds = (int)$wallet->available_seconds + $time; $wallet->save();
+            // generate loot: level-based qty; deliver to storage
             $loot = [];
+            $band = $cfg['level_qty_bands'][$level] ?? [1,2];
+            $qtyPerHour = (int) $cfg['qty_per_hour'];
+            $baseMin = (int) $band[0]; $baseMax = (int) $band[1];
             $items = StoreItem::where('is_active', true)->inRandomOrder()->limit(5)->get();
-            $count = random_int(1, min(3, max(1, $items->count())));
+            $count = max(1, min(3, $level, $items->count()));
             for ($i=0; $i<$count; $i++) {
                 $si = $items[$i]; if (!$si) break;
-                $q = random_int(1, 5);
+                $roll = random_int($baseMin, $baseMax);
+                $q = (int) min((int)$cfg['qty_max'], $roll + (int) floor($hours * $qtyPerHour));
+                if ($q <= 0) continue;
                 $loot[] = ['key'=>$si->key,'name'=>$si->name,'qty'=>$q];
                 $sto = UserStorageItem::where(['user_id'=>$user->id,'store_item_id'=>$si->id])->lockForUpdate()->first();
                 if (!$sto) { $sto = UserStorageItem::create(['user_id'=>$user->id,'store_item_id'=>$si->id,'quantity'=>0]); }
@@ -271,7 +320,7 @@ class ExpeditionController extends Controller
             }
             $ue->loot = $loot; $ue->status = 'claimed'; $ue->save();
             Flasher::addSuccess('Expedition claimed: +'.$xp.' XP and loot');
-            return response()->json(['ok'=>true,'xp'=>$xp,'loot'=>$loot]);
+            return response()->json(['ok'=>true,'xp'=>$xp,'time_seconds'=>$time,'loot'=>$loot]);
         });
     }
 }

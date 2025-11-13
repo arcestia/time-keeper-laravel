@@ -73,6 +73,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/api/store/balances', [StoreController::class, 'balances'])->name('store.balances');
     Route::post('/api/store/buy/{key}', [StoreController::class, 'buy'])->name('store.buy');
 
+    // Travel
+    Route::get('/travel', [\App\Http\Controllers\TravelController::class, 'page'])->name('travel.page');
+    Route::post('/api/travel/step', [\App\Http\Controllers\TravelController::class, 'step'])->name('travel.step');
+
     // Inventory Page
     Route::get('/inventory', [InventoryController::class, 'page'])->name('inventory.page');
 

@@ -81,6 +81,7 @@
     <script>
         (() => {
             const csrf = document.querySelector('meta[name="csrf-token"]').getAttribute('content') || '';
+            const EXP_CFG = @json(config('expeditions'));
             const panelCatalog = document.getElementById('panel-catalog');
             const panelMy = document.getElementById('panel-my');
             const tabCatalog = document.getElementById('tab-catalog');
@@ -154,6 +155,29 @@
             function fmtHMS(s){ s = parseInt(s,10)||0; const h=Math.floor(s/3600), m=Math.floor((s%3600)/60), sec=s%60; return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`; }
             function badge(text, bg, fg){ const b=document.createElement('span'); b.className=`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium ${bg} ${fg}`; b.textContent=text; return b; }
             function clamp01(x){ return Math.max(0, Math.min(1, x)); }
+            function estXp(level, seconds){
+                const h = Math.max(1, Math.ceil((parseInt(seconds,10)||0)/3600));
+                const lvl = Math.max(1, parseInt(level,10)||1);
+                const base = EXP_CFG.xp_per_hour_base ?? 10;
+                const perLv = EXP_CFG.xp_per_hour_per_level ?? 1.2;
+                const raw = (lvl * (EXP_CFG.xp_per_level ?? 12)) + (h * (base + lvl * perLv));
+                const vmin = EXP_CFG.variance_min || 0.9, vmax = Math.max(EXP_CFG.variance_max||1.2, vmin);
+                return [Math.floor(raw * vmin), Math.ceil(raw * vmax)];
+            }
+            function estTime(level, seconds){
+                const h = Math.max(1, Math.ceil((parseInt(seconds,10)||0)/3600));
+                const raw = (level * (EXP_CFG.time_per_level||36)) + (h * (EXP_CFG.time_per_hour||15));
+                const vmin = EXP_CFG.variance_min || 0.9, vmax = Math.max(EXP_CFG.variance_max||1.2, vmin);
+                return [Math.floor(raw * vmin), Math.ceil(raw * vmax)];
+            }
+            function estItemQty(level, seconds){
+                const band = (EXP_CFG.level_qty_bands||{})[level] || [1,2];
+                const h = Math.max(1, Math.ceil((parseInt(seconds,10)||0)/3600));
+                const perHour = EXP_CFG.qty_per_hour || 1;
+                const min = Math.min(EXP_CFG.qty_max||16, (band[0]||1) + Math.floor(h * perHour));
+                const max = Math.min(EXP_CFG.qty_max||16, (band[1]||2) + Math.floor(h * perHour));
+                return [min, Math.max(min, max)];
+            }
             function updateProgress(el){
                 const start = parseInt(el.getAttribute('data-start')||'0',10)||0;
                 const end = parseInt(el.getAttribute('data-end')||'0',10)||0;
@@ -176,7 +200,13 @@
                     const e = Array.isArray(data) && data[0] ? data[0] : null;
                     if (!e){ catStatus.textContent='No expeditions found'; levelMeta.textContent = `Level ${currentLevel} • Duration: - • Cost: - • Energy: -`; return; }
                     catStatus.textContent='';
-                    levelMeta.textContent = `Level ${currentLevel} • Duration: ${fmtHMS(e.min_duration_seconds)} - ${fmtHMS(e.max_duration_seconds)} • Cost: ${fmtHMS(e.cost_seconds)} • Energy: -${e.energy_cost_pct}%`;
+                    const xpMinMax = estXp(currentLevel, e.min_duration_seconds);
+                    const xpMaxMax = estXp(currentLevel, e.max_duration_seconds);
+                    const tMinMax = estTime(currentLevel, e.min_duration_seconds);
+                    const tMaxMax = estTime(currentLevel, e.max_duration_seconds);
+                    const qMin = estItemQty(currentLevel, e.min_duration_seconds);
+                    const qMax = estItemQty(currentLevel, e.max_duration_seconds);
+                    levelMeta.textContent = `Level ${currentLevel} • Duration: ${fmtHMS(e.min_duration_seconds)} - ${fmtHMS(e.max_duration_seconds)} • Cost: ${fmtHMS(e.cost_seconds)} • Energy: -${e.energy_cost_pct}% • Est. XP: ${xpMinMax[0]}–${xpMaxMax[1]} • Est. Time: ${tMinMax[0]}–${tMaxMax[1]} sec • Est. item qty per drop: ${qMin[0]}–${qMax[1]}`;
                 }catch(e){ catStatus.textContent='Unable to load expeditions'; }
             }
 
@@ -219,13 +249,19 @@
                         // badges row
                         const badges = document.createElement('div'); badges.className='mt-0.5 flex items-center gap-3 text-xs text-gray-600';
                         const lblDur = document.createElement('span'); lblDur.textContent = 'Duration';
-                        const lblXp = document.createElement('span'); lblXp.textContent = 'Base XP';
+                        const lblXp = document.createElement('span'); lblXp.textContent = 'Est. XP';
+                        const lblTm = document.createElement('span'); lblTm.textContent = 'Est. Time';
                         const dot = document.createElement('span'); dot.textContent = '•'; dot.className='text-gray-400';
                         badges.appendChild(lblDur);
                         badges.appendChild(badge(`${dur}`,'bg-indigo-100','text-indigo-700'));
                         badges.appendChild(dot);
                         badges.appendChild(lblXp);
-                        badges.appendChild(badge(`${r.base_xp}`,'bg-emerald-100','text-emerald-700'));
+                        const xpMM = estXp(lvl, r.duration_seconds||0);
+                        badges.appendChild(badge(`${xpMM[0]}–${xpMM[1]}`,'bg-emerald-100','text-emerald-700'));
+                        badges.appendChild(dot.cloneNode(true));
+                        badges.appendChild(lblTm);
+                        const tmMM = estTime(lvl, r.duration_seconds||0);
+                        badges.appendChild(badge(`${tmMM[0]}–${tmMM[1]}s`,'bg-amber-100','text-amber-700'));
                         const title = document.createElement('div'); title.className='font-medium'; title.textContent=`${name}`;
                         const actions = document.createElement('div'); actions.className='mt-1 text-sm flex items-center gap-2 flex-wrap';
                         if (r.status==='pending'){

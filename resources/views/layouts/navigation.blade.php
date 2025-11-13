@@ -24,6 +24,9 @@
                     <x-nav-link :href="route('store.page')" :active="request()->routeIs('store.page')">
                         {{ __('Store') }}
                     </x-nav-link>
+                    <x-nav-link :href="route('travel.page')" :active="request()->routeIs('travel.page')">
+                        {{ __('Travel') }}
+                    </x-nav-link>
                     <x-nav-link :href="route('inventory.page')" :active="request()->routeIs('inventory.page')">
                         {{ __('Inventory') }}
                     </x-nav-link>
@@ -104,6 +107,9 @@
             </x-responsive-nav-link>
             <x-responsive-nav-link :href="route('store.page')" :active="request()->routeIs('store.page')">
                 {{ __('Store') }}
+            </x-responsive-nav-link>
+            <x-responsive-nav-link :href="route('travel.page')" :active="request()->routeIs('travel.page')">
+                {{ __('Travel') }}
             </x-responsive-nav-link>
             <x-responsive-nav-link :href="route('inventory.page')" :active="request()->routeIs('inventory.page')">
                 {{ __('Inventory') }}
