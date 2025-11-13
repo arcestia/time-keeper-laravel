@@ -23,7 +23,11 @@ class TravelController extends Controller
     {
         $user = Auth::user();
         $now = CarbonImmutable::now();
-        $delay = random_int(2, 5);
+        // Premium T20 gets fast travel (1s delay)
+        $prem = PremiumService::getOrCreate($user->id);
+        $tier = 0; $isPrem = PremiumService::isActive($prem);
+        if ($isPrem) { $tier = PremiumService::tierFor((int)$prem->premium_seconds_accumulated); }
+        $delay = ($isPrem && $tier >= 20) ? 1 : random_int(2, 5);
         sleep($delay);
         $progress = app(ProgressService::class)->getOrCreate($user->id);
         $level = max(1, (int) $progress->level);
@@ -33,9 +37,7 @@ class TravelController extends Controller
         $minTime = (int) floor($level * 30 * 0.9);
         $maxTime = (int) ceil($level * 30 * 1.2);
         $timeSec = random_int(max(1,$minTime), max($minTime+1,$maxTime));
-        $prem = PremiumService::getOrCreate($user->id);
-        if (PremiumService::isActive($prem)) {
-            $tier = PremiumService::tierFor((int)$prem->premium_seconds_accumulated);
+        if ($isPrem) {
             $benefits = PremiumService::benefitsForTier($tier);
             $xpMult = (float)($benefits['xp_multiplier'] ?? 1.0);
             $timeMult = (float)($benefits['time_multiplier'] ?? 1.0);

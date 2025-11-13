@@ -29,6 +29,8 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Travel UI: button is dimmed/disabled during step delay and results are shown via Toastr notifications.
 - Travel UI: fixed success detection to treat responses with `{ ok: true }` as success and added `credentials: 'same-origin'` plus Toastr/jQuery includes to avoid CSRF/notification issues.
 - Travel UI: removed inline status/log output; results are shown only via notifications.
+- Travel UI: added a small progress bar on the "Take a step" button that animates during the delay.
+- Travel: Premium tier 20 now gets fast travel with 1 second delay per step.
 - Expeditions: XP and time rewards now scale by expedition level and duration (with variance and premium multipliers for XP/time). Item quantities scale by expedition level with duration bonus; loot delivered to storage.
 - Expeditions: Increased XP scaling (raised xp_per_level to 15 and xp_per_hour to 6) to better outpace short Travel steps.
 - Expeditions: Adopted Option B XP formula: `level*xp_per_level + hours*(xp_per_hour_base + level*xp_per_hour_per_level)`. Added `xp_per_hour_base` and `xp_per_hour_per_level` config keys and updated Expeditions view estimators to match.
