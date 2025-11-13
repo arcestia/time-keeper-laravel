@@ -81,6 +81,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/api/inventory/consume', [InventoryController::class, 'consume'])->name('inventory.consume');
     Route::post('/api/inventory/sell', [InventoryController::class, 'sell'])->name('inventory.sell');
     Route::post('/api/inventory/move-to-storage', [InventoryController::class, 'moveToStorage'])->name('inventory.move_to_storage');
+    Route::post('/api/inventory/move-all-to-storage', [InventoryController::class, 'moveAllToStorage'])->name('inventory.move_all_to_storage');
     Route::post('/api/inventory/move-to-inventory', [InventoryController::class, 'moveToInventory'])->name('inventory.move_to_inventory');
 
     // Expeditions

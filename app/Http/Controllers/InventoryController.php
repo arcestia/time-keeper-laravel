@@ -49,6 +49,25 @@ class InventoryController extends Controller
         });
     }
 
+    public function moveAllToStorage(): JsonResponse
+    {
+        $userId = Auth::id();
+        return DB::transaction(function() use($userId){
+            $items = UserInventoryItem::where('user_id',$userId)->lockForUpdate()->get();
+            $movedTotal = 0;
+            foreach ($items as $inv) {
+                $qty = (int) $inv->quantity;
+                if ($qty <= 0) { $inv->delete(); continue; }
+                $sto = UserStorageItem::where(['user_id'=>$userId,'store_item_id'=>$inv->store_item_id])->lockForUpdate()->first();
+                if (!$sto) { $sto = UserStorageItem::create(['user_id'=>$userId,'store_item_id'=>$inv->store_item_id,'quantity'=>0]); }
+                $sto->quantity = (int)$sto->quantity + $qty; $sto->save();
+                $inv->delete();
+                $movedTotal += $qty;
+            }
+            return response()->json(['ok'=>true,'moved_total'=>(int)$movedTotal]);
+        });
+    }
+
     public function moveToInventory(): JsonResponse
     {
         $userId = Auth::id();

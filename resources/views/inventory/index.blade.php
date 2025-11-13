@@ -13,7 +13,10 @@
                             <div class="mt-1 text-xs text-gray-600">Inventory items can be consumed or moved to storage. Storage has unlimited capacity.</div>
                             <div id="inv-meta" class="mt-1 text-xs text-gray-700">Inventory total: 0 • Global cap: 20,000</div>
                         </div>
-                        <button id="inv-refresh" class="text-sm text-indigo-600 hover:underline">Refresh</button>
+                        <div class="flex items-center gap-3">
+                            <button id="inv-move-all" class="text-sm text-gray-700 hover:underline">Move all inventory to storage</button>
+                            <button id="inv-refresh" class="text-sm text-indigo-600 hover:underline">Refresh</button>
+                        </div>
                     </div>
 
                     <div class="border-b mt-4">
@@ -54,6 +57,27 @@
             const searchBox = document.getElementById('inv-search');
             const sortSel = document.getElementById('inv-sort');
             document.getElementById('inv-refresh').addEventListener('click', load);
+            document.getElementById('inv-move-all').addEventListener('click', async () => {
+                try {
+                    status.textContent = 'Working...';
+                    const res = await fetch('/api/inventory/move-all-to-storage', {
+                        method: 'POST',
+                        headers: { 'Accept':'application/json','Content-Type':'application/json','X-Requested-With':'XMLHttpRequest','X-CSRF-TOKEN': csrf },
+                        body: JSON.stringify({})
+                    });
+                    const d = await res.json().catch(() => ({}));
+                    if (!res.ok) {
+                        const msg = (d && (d.message || d.error)) ? String(d.message || d.error) : 'Action failed';
+                        status.textContent = msg;
+                        return;
+                    }
+                    const moved = Number(d.moved_total||0);
+                    status.textContent = `Moved ${moved} items to storage`;
+                    await load();
+                } catch(e) {
+                    status.textContent = 'Action failed';
+                }
+            });
 
             let activeTab = 'inv';
             function setTab(t) {
