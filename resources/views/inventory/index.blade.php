@@ -116,8 +116,14 @@
                 const desc = entry?.item?.description || '';
                 const price = entry?.item?.price_seconds != null ? Number(entry.item.price_seconds) : null;
                 const parts = [];
-                if (type) parts.push(type);
                 if (price != null) parts.push(`${price.toLocaleString()} sec`);
+                // Add restore details if present
+                const r = [];
+                const rf = Number(entry.item.restore_food||0), rw = Number(entry.item.restore_water||0), re = Number(entry.item.restore_energy||0);
+                if (rf>0) r.push(`+${rf} Food`);
+                if (rw>0) r.push(`+${rw} Water`);
+                if (re>0) r.push(`+${re} Energy`);
+                if (r.length>0) parts.push(`Restores: ${r.join(', ')}`);
                 if (desc) parts.push(desc);
                 sub.textContent = parts.join(' • ');
                 const actions = document.createElement('div');

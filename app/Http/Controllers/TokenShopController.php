@@ -30,7 +30,7 @@ class TokenShopController extends Controller
     public function buySlot(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'color' => ['required', 'string', 'in:yellow,black'],
+            'color' => ['required', 'string', 'in:yellow,black,blue,green'],
             'qty' => ['sometimes', 'integer', 'min:1', 'max:100'],
         ]);
         $color = strtolower($data['color']);
@@ -80,19 +80,23 @@ class TokenShopController extends Controller
                     'slots' => $qty,
                     'expires_at' => null,
                 ]);
-            } elseif ($color === 'yellow') {
+            } elseif (in_array($color, ['yellow','green','blue'], true)) {
+                // All non-black colors give temporary slots; duration per token color
                 $upgrade->temp_slots = (int)$upgrade->temp_slots + $qty;
                 $now = now();
                 $base = $upgrade->temp_expires_at && $upgrade->temp_expires_at->gt($now)
                     ? $upgrade->temp_expires_at
                     : $now;
-                $upgrade->temp_expires_at = $base->copy()->addYears($qty);
-                // record grant for temp slots (all slots same expiry for this purchase)
+                // Determine per-token seconds via TimeTokenService valueSeconds
+                $perSeconds = app(\App\Services\TimeTokenService::class)->valueSeconds($color);
+                $secondsToAdd = max(1, (int)$perSeconds) * $qty;
+                $upgrade->temp_expires_at = $base->copy()->addSeconds($secondsToAdd);
+                // record grant for temp slots (expiry for this purchase only)
                 UserExpeditionUpgradeGrant::create([
                     'user_id' => $user->id,
                     'type' => 'temp',
                     'slots' => $qty,
-                    'expires_at' => $now->copy()->addYears($qty),
+                    'expires_at' => $now->copy()->addSeconds($secondsToAdd),
                 ]);
             }
 

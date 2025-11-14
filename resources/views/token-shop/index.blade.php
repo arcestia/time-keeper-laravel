@@ -23,10 +23,12 @@
                     <div id="panel-shop" class="space-y-8">
                         <div>
                             <h3 class="text-md font-semibold mb-2">Expedition Slots</h3>
-                            <p class="text-xs text-gray-500 mb-2">Black = +1 permanent slot. Yellow = +1 slot &amp; extend duration by 1 year. Max 250 extra slots.</p>
+                            <p class="text-xs text-gray-500 mb-2">Black = +1 permanent slot. Yellow/Green/Blue = +1 temp slot with duration based on token time. Max 250 extra slots.</p>
                             <div class="flex flex-wrap gap-3">
                                 <button id="btn-slot-black" class="px-3 py-2 rounded bg-gray-900 text-white text-sm">Buy 1 Permanent Slot (1 Black)</button>
                                 <button id="btn-slot-yellow" class="px-3 py-2 rounded bg-amber-500 text-white text-sm">Buy 1 Temp Slot (1 Yellow)</button>
+                                <button id="btn-slot-green" class="px-3 py-2 rounded bg-green-600 text-white text-sm">Buy 1 Temp Slot (1 Green)</button>
+                                <button id="btn-slot-blue" class="px-3 py-2 rounded bg-blue-600 text-white text-sm">Buy 1 Temp Slot (1 Blue)</button>
                             </div>
                             <div id="ts-slots-status" class="mt-2 text-xs text-gray-500"></div>
                         </div>
@@ -326,6 +328,8 @@
             // Wire up events
             const slotBlackBtn = document.getElementById('btn-slot-black'); if (slotBlackBtn) slotBlackBtn.addEventListener('click', ()=>buySlot('black'));
             const slotYellowBtn = document.getElementById('btn-slot-yellow'); if (slotYellowBtn) slotYellowBtn.addEventListener('click', ()=>buySlot('yellow'));
+            const btnGreen = document.getElementById('btn-slot-green'); if (btnGreen) btnGreen.addEventListener('click', () => buySlot('green'));
+            const btnBlue = document.getElementById('btn-slot-blue'); if (btnBlue) btnBlue.addEventListener('click', () => buySlot('blue'));
             const buyXpBtn = document.getElementById('btn-buy-xp'); if (buyXpBtn) buyXpBtn.addEventListener('click', ()=>buyXp());
             document.querySelectorAll('.btn-chest').forEach(btn => { btn.addEventListener('click', ()=>openChest(btn.getAttribute('data-color'))); });
             if (tabShop) tabShop.addEventListener('click', ()=>setTab('shop'));
