@@ -22,6 +22,7 @@
                         <span class="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700">XP Bonus x{{ number_format($mXpMult,2) }}</span>
                         <span class="px-2 py-0.5 rounded bg-amber-50 text-amber-700">Extra Slots +{{ $mExtra }}</span>
                         <span id="exp-xp-boost" class="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 hidden"></span>
+                        <span id="exp-slot-extra" class="px-2 py-0.5 rounded bg-sky-50 text-sky-700 hidden"></span>
                     </div>
 
                     <div class="border-b mt-4">
@@ -58,7 +59,7 @@
                             <button id="tab-completed" class="px-3 py-2 font-medium text-gray-600">Completed (0)</button>
                         </div>
                         <div id="pending-level-filter" class="mt-2 hidden">
-                            <div class="flex items-center gap-2">
+                            <div class="flex items-center gap-2 flex-wrap">
                                 <span class="text-xs text-gray-600">Level:</span>
                                 <button data-plvl="0" class="plvl-btn px-2 py-1 rounded border bg-indigo-50 text-indigo-700">All</button>
                                 <button data-plvl="1" class="plvl-btn px-2 py-1 rounded border">1</button>
@@ -66,6 +67,7 @@
                                 <button data-plvl="3" class="plvl-btn px-2 py-1 rounded border">3</button>
                                 <button data-plvl="4" class="plvl-btn px-2 py-1 rounded border">4</button>
                                 <button data-plvl="5" class="plvl-btn px-2 py-1 rounded border">5</button>
+                                <button id="btn-start-all-level" class="ml-2 px-2 py-1 rounded border text-gray-700 hover:bg-gray-50 disabled:opacity-40" disabled>Start All (Level —)</button>
                             </div>
                         </div>
                         <div id="active-row" class="mt-2 hidden flex items-center justify-between">
@@ -141,7 +143,7 @@
             const pendingMoreBtn = document.getElementById('btn-pending-more');
             let pendingLevel = 0;
             let activeFilter = 'all';
-            document.getElementById('xp-refresh').addEventListener('click', () => { loadCatalog(); loadMy(); loadXpBoost(); });
+            document.getElementById('xp-refresh').addEventListener('click', () => { loadCatalog(); loadMy(); loadXpBoost(); loadSlotStats(); });
 
             async function loadXpBoost(){
                 try{
@@ -160,13 +162,68 @@
                 }catch(e){}
             }
 
+            async function loadSlotStats(){
+                try{
+                    const res = await fetch('/api/token-shop/slot-stats', { headers:{'Accept':'application/json'} });
+                    if (!res.ok) throw new Error();
+                    const js = await res.json();
+                    const el = document.getElementById('exp-slot-extra');
+                    const perm = Number(js.permanent||0);
+                    const temp = Number(js.temp_active||0);
+                    const total = Number(js.total_extra||0);
+                    if (total>0){
+                        el.textContent = `Token Slots +${total}`;
+                        el.classList.remove('hidden');
+                    } else {
+                        el.textContent = '';
+                        el.classList.add('hidden');
+                    }
+                }catch(e){}
+            }
+
             // Initial loads
             loadXpBoost();
+            loadSlotStats();
 
             function ensureSwal(){
                 return new Promise((resolve)=>{
                     if (window.Swal) return resolve();
                     const s=document.createElement('script'); s.src='https://cdn.jsdelivr.net/npm/sweetalert2@11'; s.onload=()=>resolve(); document.head.appendChild(s);
+                });
+            }
+
+            // Pending level filter behavior
+            document.querySelectorAll('.plvl-btn').forEach(b=>{
+                b.addEventListener('click',()=>{
+                    document.querySelectorAll('.plvl-btn').forEach(x=>x.classList.remove('bg-indigo-50','text-indigo-700'));
+                    b.classList.add('bg-indigo-50','text-indigo-700');
+                    pendingLevel = parseInt(b.getAttribute('data-plvl'),10) || 0;
+                    const btn = document.getElementById('btn-start-all-level');
+                    if (btn){
+                        if (pendingLevel===0){ btn.disabled = false; btn.textContent = 'Start All (All Levels)'; }
+                        else if (pendingLevel>=1 && pendingLevel<=5){ btn.disabled = false; btn.textContent = `Start All (Level ${pendingLevel})`; }
+                        else { btn.disabled = true; btn.textContent = 'Start All (—)'; }
+                    }
+                    loadPendingPaginated(true);
+                });
+            });
+
+            const startAllBtn = document.getElementById('btn-start-all-level');
+            if (startAllBtn){
+                startAllBtn.addEventListener('click', async ()=>{
+                    if (!(pendingLevel>=0 && pendingLevel<=5)) return;
+                    startAllBtn.disabled = true; startAllBtn.textContent = 'Starting...';
+                    try{
+                        const res = await fetch('/api/expeditions/start-all-by-level', { method:'POST', headers:{'Accept':'application/json','Content-Type':'application/json','X-CSRF-TOKEN': csrf,'X-Requested-With':'XMLHttpRequest'}, body: JSON.stringify({ level: pendingLevel }) });
+                        const js = await res.json().catch(()=>({}));
+                        if (!res.ok) throw new Error(js && js.message ? js.message : 'Failed');
+                        // reload lists
+                        await loadMy();
+                    }catch(err){
+                        try{ await ensureSwal(); Swal.fire({icon:'error', title: (err && err.message) ? err.message : 'Failed to start'}); }catch(e){}
+                    }finally{
+                        startAllBtn.disabled = false; startAllBtn.textContent = (pendingLevel===0) ? 'Start All (All Levels)' : `Start All (Level ${pendingLevel||'—'})`;
+                    }
                 });
             }
 

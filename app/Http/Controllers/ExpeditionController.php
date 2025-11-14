@@ -2,6 +2,7 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Carbon;
@@ -23,6 +24,63 @@ class ExpeditionController extends Controller
     public function page()
     {
         return view('expeditions.index');
+    }
+
+    public function startAllByLevel(Request $request): JsonResponse
+    {
+        $user = Auth::user();
+        $data = $request->validate([
+            'level' => ['required','integer','min:0','max:50'],
+        ]);
+        $level = (int)$data['level'];
+        $now = now();
+
+        return DB::transaction(function() use($user,$level,$now){
+            // compute allowed slots (same as start())
+            $prem = \App\Services\PremiumService::getOrCreate($user->id);
+            $allowed = 1;
+            if (\App\Services\PremiumService::isActive($prem)) {
+                $tier = \App\Services\PremiumService::tierFor((int)$prem->premium_seconds_accumulated);
+                $benefits = \App\Services\PremiumService::benefitsForTier($tier);
+                $allowed = max(1, (int)($benefits['expedition_total_slots'] ?? 1));
+            }
+            $mastery = app(\App\Services\ExpeditionMasteryService::class)->getOrCreate($user->id);
+            $mBonuses = app(\App\Services\ExpeditionMasteryService::class)->bonusesForLevel((int)$mastery->level);
+            $allowed = (int)$allowed + (int)($mBonuses['expedition_extra_slots'] ?? 0);
+            $upgrade = \App\Models\UserExpeditionUpgrade::query()->where('user_id',$user->id)->first();
+            if ($upgrade) {
+                $extraPerm = (int)$upgrade->permanent_slots;
+                $extraTemp = 0;
+                if ($upgrade->temp_expires_at && $upgrade->temp_expires_at->gt($now)) {
+                    $extraTemp = (int)$upgrade->temp_slots;
+                }
+                $allowed += max(0, $extraPerm + $extraTemp);
+            }
+            $activeCount = (int) \App\Models\UserExpedition::where(['user_id'=>$user->id,'status'=>'active'])->lockForUpdate()->count();
+            $remaining = max(0, (int)$allowed - $activeCount);
+            if ($remaining <= 0) {
+                return response()->json(['ok'=>true,'started'=>0,'message'=>'No free slots']);
+            }
+
+            // select pending by requested level (0=any) up to remaining
+            $query = \App\Models\UserExpedition::query()
+                ->where(['user_id'=>$user->id,'status'=>'pending']);
+            if ($level > 0) {
+                $query->whereIn('expedition_id', function($q) use ($level){ $q->select('id')->from('expeditions')->where('level',$level); });
+            }
+            $toStart = $query->orderBy('id')->limit($remaining)->get();
+            $started = 0;
+            foreach ($toStart as $row) {
+                $ue = \App\Models\UserExpedition::where(['id'=>$row->id,'user_id'=>$user->id])->lockForUpdate()->first();
+                if (!$ue || $ue->status !== 'pending') { continue; }
+                $ue->status = 'active';
+                $ue->started_at = $now;
+                $ue->ends_at = $now->copy()->addSeconds((int)$ue->duration_seconds);
+                $ue->save();
+                $started++;
+            }
+            return response()->json(['ok'=>true,'started'=>$started,'slots_remaining'=>max(0,$remaining-$started)]);
+        });
     }
 
     public function claimAll(): JsonResponse

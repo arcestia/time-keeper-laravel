@@ -6,6 +6,7 @@ use App\Models\UserExpeditionUpgrade;
 use App\Models\UserStorageItem;
 use App\Models\UserTimeToken;
 use App\Models\UserXpBoost;
+use App\Models\UserExpeditionUpgradeGrant;
 use App\Services\TimeTokenService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -36,7 +37,7 @@ class TokenShopController extends Controller
         $qty = (int)($data['qty'] ?? 1);
         $user = Auth::user();
 
-        $maxExtra = 100;
+        $maxExtra = 250;
 
         $result = DB::transaction(function () use ($user, $color, $qty, $maxExtra) {
             $upgrade = UserExpeditionUpgrade::query()->where('user_id', $user->id)->lockForUpdate()->first();
@@ -72,6 +73,13 @@ class TokenShopController extends Controller
 
             if ($color === 'black') {
                 $upgrade->permanent_slots = (int)$upgrade->permanent_slots + $qty;
+                // record grant for permanent slots
+                UserExpeditionUpgradeGrant::create([
+                    'user_id' => $user->id,
+                    'type' => 'permanent',
+                    'slots' => $qty,
+                    'expires_at' => null,
+                ]);
             } elseif ($color === 'yellow') {
                 $upgrade->temp_slots = (int)$upgrade->temp_slots + $qty;
                 $now = now();
@@ -79,6 +87,13 @@ class TokenShopController extends Controller
                     ? $upgrade->temp_expires_at
                     : $now;
                 $upgrade->temp_expires_at = $base->copy()->addYears($qty);
+                // record grant for temp slots (all slots same expiry for this purchase)
+                UserExpeditionUpgradeGrant::create([
+                    'user_id' => $user->id,
+                    'type' => 'temp',
+                    'slots' => $qty,
+                    'expires_at' => $now->copy()->addYears($qty),
+                ]);
             }
 
             $upgrade->save();
@@ -296,5 +311,60 @@ class TokenShopController extends Controller
             ];
         }
         return response()->json(['ok' => true, 'boosts' => $out]);
+    }
+
+    public function slotGrants(): JsonResponse
+    {
+        $user = Auth::user();
+        $now = now();
+        $rows = UserExpeditionUpgradeGrant::query()
+            ->where('user_id', $user->id)
+            ->orderByDesc('id')
+            ->limit(200)
+            ->get();
+        $out = [];
+        foreach ($rows as $r) {
+            $created = $r->created_at ?: $now;
+            $expires = $r->expires_at;
+            $active = $expires ? $expires->gt($now) : true; // permanent treated as active
+            $totalSec = null; $remainSec = null; $progress = null;
+            if ($expires) {
+                $totalSec = max(1, $expires->diffInSeconds($created, false) * -1 ?: $expires->diffInSeconds($created));
+                $remainSec = max(0, $expires->diffInSeconds($now, false) * -1);
+                $progress = $totalSec > 0 ? max(0.0, min(1.0, ($totalSec - $remainSec) / $totalSec)) : 1.0;
+            }
+            $out[] = [
+                'id' => (int)$r->id,
+                'type' => (string)$r->type,
+                'slots' => (int)$r->slots,
+                'created_at' => $created,
+                'expires_at' => $expires,
+                'active' => $active,
+                'total_seconds' => $totalSec,
+                'remaining_seconds' => $remainSec,
+                'progress' => $progress,
+            ];
+        }
+        return response()->json(['ok'=>true,'grants'=>$out]);
+    }
+
+    public function slotStats(): JsonResponse
+    {
+        $user = Auth::user();
+        $now = now();
+        $upgrade = UserExpeditionUpgrade::query()->where('user_id', $user->id)->first();
+        $perm = (int)($upgrade->permanent_slots ?? 0);
+        $temp = 0; $expires = null;
+        if ($upgrade && $upgrade->temp_expires_at && $upgrade->temp_expires_at->gt($now)) {
+            $temp = (int)($upgrade->temp_slots ?? 0);
+            $expires = $upgrade->temp_expires_at;
+        }
+        return response()->json([
+            'ok' => true,
+            'permanent' => $perm,
+            'temp_active' => $temp,
+            'temp_expires_at' => $expires,
+            'total_extra' => max(0, $perm + $temp),
+        ]);
     }
 }

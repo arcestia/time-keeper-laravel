@@ -100,6 +100,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/api/expeditions/buy/{id}', [ExpeditionController::class, 'buy'])->name('expeditions.buy');
     Route::post('/api/expeditions/buy-level', [ExpeditionController::class, 'buyLevel'])->name('expeditions.buylevel');
     Route::post('/api/expeditions/start/{id}', [ExpeditionController::class, 'start'])->name('expeditions.start');
+    Route::post('/api/expeditions/start-all-by-level', [ExpeditionController::class, 'startAllByLevel'])->name('expeditions.start_all_by_level');
     Route::post('/api/expeditions/claim/{id}', [ExpeditionController::class, 'claim'])->name('expeditions.claim');
     Route::post('/api/expeditions/claim-all', [ExpeditionController::class, 'claimAll'])->name('expeditions.claim_all');
 
@@ -110,6 +111,8 @@ Route::middleware('auth')->group(function () {
     Route::post('/api/token-shop/buy-xp', [TokenShopController::class, 'buyXp'])->name('token_shop.buy_xp');
     Route::post('/api/token-shop/open-chest', [TokenShopController::class, 'openChest'])->name('token_shop.open_chest');
     Route::get('/api/token-shop/boosts', [TokenShopController::class, 'boosts'])->name('token_shop.boosts');
+    Route::get('/api/token-shop/slot-grants', [TokenShopController::class, 'slotGrants'])->name('token_shop.slot_grants');
+    Route::get('/api/token-shop/slot-stats', [TokenShopController::class, 'slotStats'])->name('token_shop.slot_stats');
 
     // Time Keeper stats
     Route::get('/keeper', [TimeKeeperController::class, 'page'])->name('keeper.page');

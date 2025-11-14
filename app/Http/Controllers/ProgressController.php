@@ -48,9 +48,19 @@ class ProgressController extends Controller
     public function xpBoost(Request $request): JsonResponse
     {
         $user = $request->user();
-        $boost = UserXpBoost::query()->where('user_id', $user->id)->first();
-        $bonus = (float) ($boost->bonus_percent ?? 0.0);
-        $expiresAt = $boost?->expires_at;
+        $now = now();
+        $bonus = (float) UserXpBoost::query()
+            ->where('user_id', $user->id)
+            ->whereNotNull('expires_at')
+            ->where('expires_at', '>', $now)
+            ->sum('bonus_percent');
+        // soonest expiry among active boosts (useful for UI, optional)
+        $expiresAt = UserXpBoost::query()
+            ->where('user_id', $user->id)
+            ->whereNotNull('expires_at')
+            ->where('expires_at', '>', $now)
+            ->orderBy('expires_at', 'asc')
+            ->value('expires_at');
         return response()->json([
             'bonus_percent' => $bonus,
             'expires_at' => $expiresAt,
