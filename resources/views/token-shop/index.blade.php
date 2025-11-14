@@ -11,12 +11,14 @@
                         <div class="text-lg font-semibold">Spend Time Tokens</div>
                         <div id="ts-balances" class="text-sm text-gray-600"></div>
                     </div>
+                    
 
                     <div class="border-b mb-3">
                         <div class="flex items-center gap-3">
                             <button id="tab-shop" class="px-3 py-2 text-sm font-medium border-b-2 border-indigo-600 text-indigo-700">Shop</button>
                             <button id="tab-boosts" class="px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-800">Boosts</button>
                             <button id="tab-grants" class="px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-800">Slot Grants</button>
+                            <button id="tab-convert" class="px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-800">Convert</button>
                         </div>
                     </div>
 
@@ -94,6 +96,53 @@
                         <div id="grants-status" class="text-sm text-gray-500 mb-2">Loading...</div>
                         <ul id="grants-list" class="space-y-3"></ul>
                     </div>
+                    <div id="panel-convert" class="hidden">
+                        <h3 class="text-md font-semibold mb-2">Convert Tokens</h3>
+                        <div class="grid md:grid-cols-2 gap-4">
+                            <div class="p-3 border rounded">
+                                <div class="font-medium mb-1">Token → Token</div>
+                                <div class="flex flex-wrap items-center gap-2 text-sm">
+                                    <label>From</label>
+                                    <select id="cv-from" class="border rounded px-2 py-1">
+                                        <option value="red">Red</option>
+                                        <option value="blue">Blue</option>
+                                        <option value="green">Green</option>
+                                        <option value="yellow">Yellow</option>
+                                        <option value="black">Black</option>
+                                    </select>
+                                    <label>To</label>
+                                    <select id="cv-to" class="border rounded px-2 py-1">
+                                        <option value="red">Red</option>
+                                        <option value="blue">Blue</option>
+                                        <option value="green">Green</option>
+                                        <option value="yellow">Yellow</option>
+                                        <option value="black">Black</option>
+                                    </select>
+                                    <input id="cv-qty" type="number" min="1" value="1" class="w-24 border rounded px-2 py-1" />
+                                    <button id="btn-convert" class="px-3 py-1 rounded bg-gray-800 text-white">Convert</button>
+                                </div>
+                                <div class="mt-1 text-xs text-gray-600">Preview: <span id="cv-preview">—</span></div>
+                                <div id="cv-status" class="mt-1 text-xs text-gray-500"></div>
+                            </div>
+                            <div class="p-3 border rounded">
+                                <div class="font-medium mb-1">Token → Bank</div>
+                                <div class="flex flex-wrap items-center gap-2 text-sm">
+                                    <label>Color</label>
+                                    <select id="ex-color" class="border rounded px-2 py-1">
+                                        <option value="red">Red</option>
+                                        <option value="blue">Blue</option>
+                                        <option value="green">Green</option>
+                                        <option value="yellow">Yellow</option>
+                                        <option value="black">Black</option>
+                                    </select>
+                                    <input id="ex-qty" type="number" min="1" value="1" class="w-24 border rounded px-2 py-1" />
+                                    <button id="btn-exchange" class="px-3 py-1 rounded bg-gray-800 text-white">Exchange</button>
+                                </div>
+                                <div class="mt-1 text-xs text-gray-600">Preview: <span id="ex-preview">—</span></div>
+                                <div id="ex-status" class="mt-1 text-xs text-gray-500"></div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -106,9 +155,11 @@
             const tabShop = document.getElementById('tab-shop');
             const tabBoosts = document.getElementById('tab-boosts');
             const tabGrants = document.getElementById('tab-grants');
+            const tabConvert = document.getElementById('tab-convert');
             const panelShop = document.getElementById('panel-shop');
             const panelBoosts = document.getElementById('panel-boosts');
             const panelGrants = document.getElementById('panel-grants');
+            const panelConvert = document.getElementById('panel-convert');
             const boostsList = document.getElementById('boosts-list');
             const boostsStatus = document.getElementById('boosts-status');
             const grantsList = document.getElementById('grants-list');
@@ -277,9 +328,11 @@
                 setActive(tabShop, which==='shop');
                 setActive(tabBoosts, which==='boosts');
                 setActive(tabGrants, which==='grants');
+                setActive(tabConvert, which==='convert');
                 if (panelShop) panelShop.classList.toggle('hidden', which!=='shop');
                 if (panelBoosts) panelBoosts.classList.toggle('hidden', which!=='boosts');
                 if (panelGrants) panelGrants.classList.toggle('hidden', which!=='grants');
+                if (panelConvert) panelConvert.classList.toggle('hidden', which!=='convert');
                 if (which==='boosts') loadBoosts();
                 if (which==='grants') loadGrants();
             }
@@ -335,11 +388,71 @@
             if (tabShop) tabShop.addEventListener('click', ()=>setTab('shop'));
             if (tabBoosts) tabBoosts.addEventListener('click', ()=>setTab('boosts'));
             if (tabGrants) tabGrants.addEventListener('click', ()=>setTab('grants'));
+            if (tabConvert) tabConvert.addEventListener('click', ()=>setTab('convert'));
 
             // Init
             refreshBalances();
             setTab('shop');
             setInterval(function(){ tickBoosts(); tickGrants(); }, 1000);
+
+            // Conversion helpers
+            const SEC = { red:604800, blue:2592000, green:31536000, yellow:315360000, black:3153600000 };
+            function cvUpdate(){
+                const f = (document.getElementById('cv-from')||{}).value||'red';
+                const t = (document.getElementById('cv-to')||{}).value||'blue';
+                const q = Math.max(1, parseInt((document.getElementById('cv-qty')||{}).value||'1',10));
+                const pv = document.getElementById('cv-preview');
+                if (!pv){ return; }
+                if (!SEC[f]||!SEC[t]){ pv.textContent='—'; return; }
+                const out = Math.floor((SEC[f]*q)/SEC[t]);
+                pv.textContent = `${q} ${f} ≈ ${out} ${t}`;
+            }
+            ['cv-from','cv-to','cv-qty'].forEach(id=>{ const el=document.getElementById(id); if(el) el.addEventListener('input', cvUpdate); });
+            if (document.getElementById('cv-preview')) { cvUpdate(); } else { setTimeout(cvUpdate, 0); }
+
+            const btnConvert = document.getElementById('btn-convert');
+            if (btnConvert){
+                btnConvert.addEventListener('click', async ()=>{
+                    const from = (document.getElementById('cv-from')||{}).value||'red';
+                    const to = (document.getElementById('cv-to')||{}).value||'blue';
+                    const qty = Math.max(1, parseInt((document.getElementById('cv-qty')||{}).value||'1',10));
+                    const st = document.getElementById('cv-status'); st.textContent='Converting...';
+                    try{
+                        const res = await fetch('/api/token-shop/convert', { method:'POST', headers:{'Accept':'application/json','Content-Type':'application/json','X-CSRF-TOKEN': csrf,'X-Requested-With':'XMLHttpRequest'}, body: JSON.stringify({ from, to, qty }) });
+                        const js = await res.json().catch(()=>({}));
+                        if (!res.ok || !js.ok) throw new Error(js?.message||'Convert failed');
+                        st.textContent = `Converted ${js.spent_qty} ${js.from} → ${js.received_qty} ${js.to}`;
+                        refreshBalances(); cvUpdate();
+                    }catch(err){ st.textContent = (err&&err.message)?err.message:'Convert failed'; }
+                });
+            }
+
+            function exUpdate(){
+                const c = (document.getElementById('ex-color')||{}).value||'red';
+                const q = Math.max(1, parseInt((document.getElementById('ex-qty')||{}).value||'1',10));
+                const pv = document.getElementById('ex-preview');
+                if (!pv){ return; }
+                if (!SEC[c]) { pv.textContent='—'; return; }
+                const secs = SEC[c]*q; pv.textContent = `${q} ${c} ≈ ${secs.toLocaleString()} sec`;
+            }
+            ['ex-color','ex-qty'].forEach(id=>{ const el=document.getElementById(id); if(el) el.addEventListener('input', exUpdate); });
+            if (document.getElementById('ex-preview')) { exUpdate(); } else { setTimeout(exUpdate, 0); }
+
+            const btnExchange = document.getElementById('btn-exchange');
+            if (btnExchange){
+                btnExchange.addEventListener('click', async ()=>{
+                    const color = (document.getElementById('ex-color')||{}).value||'red';
+                    const qty = Math.max(1, parseInt((document.getElementById('ex-qty')||{}).value||'1',10));
+                    const st = document.getElementById('ex-status'); st.textContent='Exchanging...';
+                    try{
+                        const res = await fetch('/api/token-shop/exchange', { method:'POST', headers:{'Accept':'application/json','Content-Type':'application/json','X-CSRF-TOKEN': csrf,'X-Requested-With':'XMLHttpRequest'}, body: JSON.stringify({ color, qty }) });
+                        const js = await res.json().catch(()=>({}));
+                        if (!res.ok || !js.ok) throw new Error(js?.message||'Exchange failed');
+                        st.textContent = `Credited ${Number(js.credited_seconds||0).toLocaleString()} sec to bank`;
+                        refreshBalances(); exUpdate();
+                    }catch(err){ st.textContent = (err&&err.message)?err.message:'Exchange failed'; }
+                });
+            }
         })();
     </script>
 </x-app-layout>

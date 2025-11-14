@@ -371,4 +371,70 @@ class TokenShopController extends Controller
             'total_extra' => max(0, $perm + $temp),
         ]);
     }
+
+    public function exchangeToBank(Request $request, TimeTokenService $tts): JsonResponse
+    {
+        $data = $request->validate([
+            'color' => ['required', 'string', 'in:red,blue,green,yellow,black'],
+            'qty' => ['required', 'integer', 'min:1', 'max:1000000'],
+        ]);
+        $user = Auth::user();
+        $result = $tts->exchange($user->id, strtolower($data['color']), (int)$data['qty']);
+        if (!($result['ok'] ?? false)) {
+            $msg = (string)($result['message'] ?? 'Exchange failed');
+            return response()->json(['ok'=>false,'message'=>$msg], 422);
+        }
+        return response()->json($result);
+    }
+
+    public function convertTokens(Request $request, TimeTokenService $tts): JsonResponse
+    {
+        $data = $request->validate([
+            'from' => ['required','string','in:red,blue,green,yellow,black'],
+            'to' => ['required','string','in:red,blue,green,yellow,black'],
+            'qty' => ['required','integer','min:1','max:1000000'],
+        ]);
+        $from = strtolower($data['from']);
+        $to = strtolower($data['to']);
+        if ($from === $to) {
+            return response()->json(['ok'=>false,'message'=>'Choose different colors'], 422);
+        }
+        $user = Auth::user();
+        $perFrom = max(0, (int)$tts->valueSeconds($from));
+        $perTo = max(1, (int)$tts->valueSeconds($to));
+        if ($perFrom <= 0 || $perTo <= 0) {
+            return response()->json(['ok'=>false,'message'=>'Unknown token color'], 422);
+        }
+        $qty = (int)$data['qty'];
+
+        return DB::transaction(function() use($user,$from,$to,$qty,$perFrom,$perTo,$tts){
+            // Lock and check source balance
+            $src = \App\Models\UserTimeToken::query()->where(['user_id'=>$user->id,'color'=>$from])->lockForUpdate()->first();
+            $have = (int)($src->quantity ?? 0);
+            if ($have < $qty) {
+                return response()->json(['ok'=>false,'message'=>'Not enough source tokens'], 422);
+            }
+            // Compute output qty by seconds equivalence
+            $totalSec = (int) ($perFrom * $qty);
+            $outQty = (int) floor($totalSec / $perTo);
+            if ($outQty <= 0) {
+                return response()->json(['ok'=>false,'message'=>'Amount too small to convert'], 422);
+            }
+            // Debit source
+            $src->quantity = $have - $qty;
+            if ($src->quantity <= 0) { $src->delete(); } else { $src->save(); }
+            // Credit destination
+            $dst = \App\Models\UserTimeToken::query()->where(['user_id'=>$user->id,'color'=>$to])->lockForUpdate()->first();
+            if (!$dst) { $dst = \App\Models\UserTimeToken::create(['user_id'=>$user->id,'color'=>$to,'quantity'=>0]); }
+            $dst->quantity = (int)$dst->quantity + $outQty; $dst->save();
+            return response()->json([
+                'ok'=>true,
+                'from' => $from,
+                'to' => $to,
+                'spent_qty' => $qty,
+                'received_qty' => $outQty,
+                'ratio' => ($perFrom.'/'.$perTo),
+            ]);
+        });
+    }
 }
