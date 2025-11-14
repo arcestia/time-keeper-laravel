@@ -150,7 +150,7 @@
             const pendingMoreBtn = document.getElementById('btn-pending-more');
             let pendingLevel = 0;
             let activeFilter = 'all';
-            document.getElementById('xp-refresh').addEventListener('click', () => { loadCatalog(); loadMy(); loadXpBoost(); loadSlotStats(); });
+            document.getElementById('xp-refresh').addEventListener('click', () => { loadCatalog(); loadMy(); loadXpBoost(); loadSlotStats(); refreshCounts(pendingLevel); });
 
             async function loadXpBoost(){
                 try{
@@ -191,6 +191,7 @@
             // Initial loads
             loadXpBoost();
             loadSlotStats();
+            refreshCounts(0);
 
             function ensureSwal(){
                 return new Promise((resolve)=>{
@@ -212,6 +213,7 @@
                         else { btn.disabled = true; btn.textContent = 'Start All (—)'; }
                     }
                     loadPendingPaginated(true);
+                    refreshCounts(pendingLevel);
                 });
             });
 
@@ -263,6 +265,8 @@
                 // When switching to pending tab, ensure Load More visibility reflects state
                 if (which==='pending') { pendingMoreWrap.classList.toggle('hidden', !pendingHasMore); }
                 else { pendingMoreWrap.classList.add('hidden'); }
+                // Update counts with current filter
+                if (which==='pending') { refreshCounts(pendingLevel); } else { refreshCounts(0); }
             }
             tPending.addEventListener('click',()=>setMyTab('pending'));
             tActive.addEventListener('click',()=>setMyTab('active'));
@@ -278,9 +282,10 @@
                 });
             });
 
-            async function refreshCounts(){
+            async function refreshCounts(level=0){
                 try{
-                    const res = await fetch('/api/expeditions/my-counts', { headers:{'Accept':'application/json'} });
+                    const url = level>=1 && level<=5 ? (`/api/expeditions/my-counts?level=${level}`) : '/api/expeditions/my-counts';
+                    const res = await fetch(url, { headers:{'Accept':'application/json'} });
                     if (!res.ok) throw new Error();
                     const js = await res.json();
                     const c = js && js.counts ? js.counts : {};
@@ -476,8 +481,7 @@
                         const wrap=document.createElement('div'); wrap.appendChild(title); wrap.appendChild(badges); wrap.appendChild(actions);
                         const li2=document.createElement('li'); li2.className='py-3'; li2.appendChild(wrap); listPending.appendChild(li2);
                     }
-                    // update count label by counting DOM nodes
-                    tPending.textContent = `Pending (${listPending.children.length})`;
+                    // do not override server count with DOM length; counts are fetched via refreshCounts
                     // has more?
                     if (Array.isArray(json)) { pendingHasMore = false; }
                     else { pendingHasMore = !!json.next_page_url; }

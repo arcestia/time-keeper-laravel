@@ -240,11 +240,14 @@ class ExpeditionController extends Controller
     public function myCounts(): JsonResponse
     {
         $userId = Auth::id();
-        $rows = UserExpedition::query()
+        $level = (int) request('level', 0);
+        $q = UserExpedition::query()
             ->select('status', \DB::raw('COUNT(*) as c'))
-            ->where('user_id', $userId)
-            ->groupBy('status')
-            ->get();
+            ->where('user_id', $userId);
+        if ($level >= 1 && $level <= 5) {
+            $q->whereHas('expedition', function($qq) use($level){ $qq->where('level', $level); });
+        }
+        $rows = $q->groupBy('status')->get();
         $map = [
             'pending' => 0,
             'active' => 0,
@@ -256,7 +259,7 @@ class ExpeditionController extends Controller
             if (array_key_exists($s, $map)) { $map[$s] = (int)$r->c; }
         }
         $map['completed_all'] = (int)$map['completed'] + (int)$map['claimed'];
-        return response()->json(['ok'=>true,'counts'=>$map]);
+        return response()->json(['ok'=>true,'counts'=>$map,'level'=>$level]);
     }
 
     public function buy(int $expeditionId): JsonResponse
