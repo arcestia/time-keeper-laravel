@@ -312,7 +312,7 @@ class ExpeditionController extends Controller
         $now = now();
         $source = request()->input('source','wallet');
         if (!in_array($source,['wallet','bank'],true)) $source = 'wallet';
-        $qty = max(1, min(50, (int) request()->input('qty', 1)));
+        $qty = max(1, min(250, (int) request()->input('qty', 1)));
 
         $result = DB::transaction(function() use($user,$exp,$source,$now,$level,$qty){
             $price = (int)$exp->cost_seconds * $qty;

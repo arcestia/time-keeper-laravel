@@ -44,10 +44,17 @@
                         <div id="cat-status" class="mt-2 text-sm text-gray-500"></div>
                         <div class="mt-3 p-4 border rounded">
                             <div id="level-meta" class="text-sm text-gray-700">Level 1 • Duration: - • Cost: - • Energy: -</div>
-                            <div class="mt-3 flex items-center gap-3">
+                            <div class="mt-3 flex items-center gap-3 flex-wrap">
                                 <label class="text-sm text-gray-600">Quantity</label>
-                                <input id="buy-qty" type="number" min="1" max="50" value="1" class="w-24 border rounded px-2 py-1 text-sm" />
+                                <input id="buy-qty" type="number" min="1" max="250" value="1" class="w-24 border rounded px-2 py-1 text-sm" />
                                 <button id="buy-level" class="px-3 py-2 rounded bg-indigo-600 text-white">Buy Random Expedition</button>
+                                <div class="flex items-center gap-2 text-xs">
+                                    <span class="text-gray-500">Quick:</span>
+                                    <button class="btn-quick-buy px-2 py-1 rounded border hover:bg-gray-50" data-q="10">10</button>
+                                    <button class="btn-quick-buy px-2 py-1 rounded border hover:bg-gray-50" data-q="50">50</button>
+                                    <button class="btn-quick-buy px-2 py-1 rounded border hover:bg-gray-50" data-q="100">100</button>
+                                    <button class="btn-quick-buy px-2 py-1 rounded border hover:bg-gray-50" data-q="250">250</button>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -392,7 +399,7 @@
                 });
                 if (!isConfirmed) return;
                 try{
-                    const qty = Math.max(1, Math.min(50, parseInt(buyQty.value,10)||1));
+                    const qty = Math.max(1, Math.min(250, parseInt(buyQty.value,10)||1));
                     const res = await fetch(`/api/expeditions/buy-level`, { method:'POST', headers:{'Accept':'application/json','Content-Type':'application/json','X-CSRF-TOKEN': csrf,'X-Requested-With':'XMLHttpRequest'}, body: JSON.stringify({ level: currentLevel, source: src, qty }) });
                     if (!res.ok) throw new Error();
                     await loadMy();
@@ -400,6 +407,15 @@
                     const r = await res.json();
                     Swal.fire({ icon:'success', title:`Purchased ${r?.count||qty}` });
                 }catch(err){ const msg = (err && err.message) ? err.message : 'Failed to buy'; Swal.fire({ icon:'error', title: msg }); }
+            });
+
+            // Quick buy buttons: set qty and reuse existing flow
+            document.querySelectorAll('.btn-quick-buy').forEach(b => {
+                b.addEventListener('click', async () => {
+                    const n = Math.max(1, Math.min(250, parseInt(b.getAttribute('data-q'),10)||1));
+                    buyQty.value = String(n);
+                    buyLevelBtn.click();
+                });
             });
 
             let pendingPage = 1;
