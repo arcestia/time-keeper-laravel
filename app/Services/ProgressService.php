@@ -29,12 +29,15 @@ class ProgressService
 
         // Apply global XP boost from token shop, if active
         if ($amount > 0) {
-            $boost = UserXpBoost::query()->where('user_id', $userId)->first();
-            if ($boost && $boost->expires_at && $boost->expires_at->gt(Carbon::now())) {
-                $mult = 1.0 + (float) ($boost->bonus_percent ?? 0.0);
-                if ($mult > 0) {
-                    $amount = (int) floor($amount * $mult);
-                }
+            $now = Carbon::now();
+            $totalBonus = (float) UserXpBoost::query()
+                ->where('user_id', $userId)
+                ->whereNotNull('expires_at')
+                ->where('expires_at', '>', $now)
+                ->sum('bonus_percent');
+            $mult = 1.0 + max(0.0, $totalBonus);
+            if ($mult > 0) {
+                $amount = (int) floor($amount * $mult);
             }
         }
 

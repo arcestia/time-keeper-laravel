@@ -141,28 +141,24 @@ class TokenShopController extends Controller
             $seconds = max(1, (int)$perSeconds);
             $now = now();
 
-            $boost = UserXpBoost::query()->where('user_id', $user->id)->lockForUpdate()->first();
-            if (!$boost) {
-                $boost = UserXpBoost::create([
-                    'user_id' => $user->id,
-                    'bonus_percent' => 0.0,
-                    'expires_at' => null,
-                ]);
-            }
+            // Create a new boost record per purchase (no merging)
+            $newBoost = UserXpBoost::create([
+                'user_id' => $user->id,
+                'bonus_percent' => $bonusAdd,
+                'expires_at' => $now->copy()->addSeconds($seconds),
+            ]);
 
-            $currentBonus = (float)($boost->bonus_percent ?? 0.0);
-            $currentExpiry = $boost->expires_at;
-            $boost->bonus_percent = $currentBonus + $bonusAdd;
-
-            // Extend duration from max(now, currentExpiry)
-            $baseTime = ($currentExpiry && $currentExpiry->gt($now)) ? $currentExpiry : $now;
-            $boost->expires_at = $baseTime->copy()->addSeconds($seconds);
-            $boost->save();
+            // Compute total active bonus after this purchase
+            $totalActive = (float) UserXpBoost::query()
+                ->where('user_id', $user->id)
+                ->whereNotNull('expires_at')
+                ->where('expires_at', '>', $now)
+                ->sum('bonus_percent');
 
             return [
                 'ok' => true,
-                'bonus_percent' => (float)$boost->bonus_percent,
-                'expires_at' => $boost->expires_at,
+                'bonus_percent' => $totalActive,
+                'expires_at' => $newBoost->expires_at,
                 'added_percent' => $bonusAdd,
                 'spent_qty' => $qty,
             ];
@@ -266,5 +262,39 @@ class TokenShopController extends Controller
         }
 
         return response()->json($result);
+    }
+
+    public function boosts(): JsonResponse
+    {
+        $user = Auth::user();
+        $now = now();
+        $rows = UserXpBoost::query()
+            ->where('user_id', $user->id)
+            ->orderByDesc('id')
+            ->limit(200)
+            ->get();
+        $out = [];
+        foreach ($rows as $r) {
+            $created = $r->created_at ?: $now;
+            $expires = $r->expires_at;
+            $totalSec = null; $remainSec = null; $progress = 0.0; $active = false;
+            if ($expires) {
+                $totalSec = max(1, $expires->diffInSeconds($created, false) * -1 ?: $expires->diffInSeconds($created));
+                $remainSec = max(0, $expires->diffInSeconds($now, false) * -1);
+                $active = $expires->gt($now);
+                $progress = $totalSec > 0 ? max(0.0, min(1.0, ($totalSec - $remainSec) / $totalSec)) : 1.0;
+            }
+            $out[] = [
+                'id' => (int)$r->id,
+                'bonus_percent' => (float)$r->bonus_percent,
+                'created_at' => $created,
+                'expires_at' => $expires,
+                'active' => $active,
+                'total_seconds' => $totalSec,
+                'remaining_seconds' => $remainSec,
+                'progress' => $progress,
+            ];
+        }
+        return response()->json(['ok' => true, 'boosts' => $out]);
     }
 }

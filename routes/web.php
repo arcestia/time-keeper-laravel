@@ -109,6 +109,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/api/token-shop/buy-slot', [TokenShopController::class, 'buySlot'])->name('token_shop.buy_slot');
     Route::post('/api/token-shop/buy-xp', [TokenShopController::class, 'buyXp'])->name('token_shop.buy_xp');
     Route::post('/api/token-shop/open-chest', [TokenShopController::class, 'openChest'])->name('token_shop.open_chest');
+    Route::get('/api/token-shop/boosts', [TokenShopController::class, 'boosts'])->name('token_shop.boosts');
 
     // Time Keeper stats
     Route::get('/keeper', [TimeKeeperController::class, 'page'])->name('keeper.page');
