@@ -6,6 +6,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use App\Services\ProgressService;
+use App\Models\UserXpBoost;
 
 class ProgressController extends Controller
 {
@@ -41,6 +42,18 @@ class ProgressController extends Controller
             'level' => (int) $p->level,
             'xp' => (int) $p->xp,
             'next_xp' => (int) $p->next_xp,
+        ]);
+    }
+
+    public function xpBoost(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $boost = UserXpBoost::query()->where('user_id', $user->id)->first();
+        $bonus = (float) ($boost->bonus_percent ?? 0.0);
+        $expiresAt = $boost?->expires_at;
+        return response()->json([
+            'bonus_percent' => $bonus,
+            'expires_at' => $expiresAt,
         ]);
     }
 }

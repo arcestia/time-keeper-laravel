@@ -3,7 +3,9 @@
 namespace App\Services;
 
 use App\Models\UserProgress;
+use App\Models\UserXpBoost;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Carbon;
 
 class ProgressService
 {
@@ -24,6 +26,18 @@ class ProgressService
     public function addXp(int $userId, int $amount): UserProgress
     {
         $amount = max(0, $amount);
+
+        // Apply global XP boost from token shop, if active
+        if ($amount > 0) {
+            $boost = UserXpBoost::query()->where('user_id', $userId)->first();
+            if ($boost && $boost->expires_at && $boost->expires_at->gt(Carbon::now())) {
+                $mult = 1.0 + (float) ($boost->bonus_percent ?? 0.0);
+                if ($mult > 0) {
+                    $amount = (int) floor($amount * $mult);
+                }
+            }
+        }
+
         return DB::transaction(function () use ($userId, $amount) {
             // Lock the user's progress row; create if missing
             $p = UserProgress::query()->where('user_id', $userId)->lockForUpdate()->first();

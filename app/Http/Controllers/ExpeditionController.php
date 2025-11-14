@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Carbon;
 use App\Models\Expedition;
 use App\Models\UserExpedition;
+use App\Models\UserExpeditionUpgrade;
 use App\Models\UserStats;
 use App\Models\UserTimeWallet;
 use App\Models\TimeAccount;
@@ -310,6 +311,17 @@ class ExpeditionController extends Controller
             $mastery = app(ExpeditionMasteryService::class)->getOrCreate($user->id);
             $mBonuses = app(ExpeditionMasteryService::class)->bonusesForLevel((int)$mastery->level);
             $allowed = (int)$allowed + (int)($mBonuses['expedition_extra_slots'] ?? 0);
+
+            // add token shop extra slots (permanent + active temporary)
+            $upgrade = UserExpeditionUpgrade::query()->where('user_id', $user->id)->first();
+            if ($upgrade) {
+                $extraPerm = (int)$upgrade->permanent_slots;
+                $extraTemp = 0;
+                if ($upgrade->temp_expires_at && $upgrade->temp_expires_at->gt($now)) {
+                    $extraTemp = (int)$upgrade->temp_slots;
+                }
+                $allowed += max(0, $extraPerm + $extraTemp);
+            }
             $activeCount = (int) UserExpedition::where(['user_id'=>$user->id,'status'=>'active'])->lockForUpdate()->count();
             if ($activeCount >= $allowed) {
                 return response()->json(['ok'=>false,'message'=>"Active expeditions limit reached (${activeCount}/${allowed}). Upgrade premium tier or wait until one finishes."], 422);

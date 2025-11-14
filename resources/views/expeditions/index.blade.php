@@ -21,6 +21,7 @@
                         <span class="px-2 py-0.5 rounded bg-indigo-50 text-indigo-700">Mastery Lv {{ (int)$m->level }}</span>
                         <span class="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700">XP Bonus x{{ number_format($mXpMult,2) }}</span>
                         <span class="px-2 py-0.5 rounded bg-amber-50 text-amber-700">Extra Slots +{{ $mExtra }}</span>
+                        <span id="exp-xp-boost" class="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 hidden"></span>
                     </div>
 
                     <div class="border-b mt-4">
@@ -136,10 +137,31 @@
             const activeFilterWrap = document.getElementById('active-status-filter');
             const activeRow = document.getElementById('active-row');
             const pendingMoreWrap = document.getElementById('pending-more-wrap');
+            const xpBoostBadge = document.getElementById('exp-xp-boost');
             const pendingMoreBtn = document.getElementById('btn-pending-more');
             let pendingLevel = 0;
             let activeFilter = 'all';
-            document.getElementById('xp-refresh').addEventListener('click', () => { loadCatalog(); loadMy(); });
+            document.getElementById('xp-refresh').addEventListener('click', () => { loadCatalog(); loadMy(); loadXpBoost(); });
+
+            async function loadXpBoost(){
+                try{
+                    const res = await fetch('/api/me/xp-boost', { headers:{'Accept':'application/json'} });
+                    if (!res.ok) throw new Error();
+                    const b = await res.json();
+                    const bonus = Number(b.bonus_percent || 0);
+                    if (bonus > 0){
+                        const pct = (bonus * 100).toFixed(1);
+                        xpBoostBadge.textContent = `XP Boost +${pct}%`;
+                        xpBoostBadge.classList.remove('hidden');
+                    } else {
+                        xpBoostBadge.textContent = '';
+                        xpBoostBadge.classList.add('hidden');
+                    }
+                }catch(e){}
+            }
+
+            // Initial loads
+            loadXpBoost();
 
             function ensureSwal(){
                 return new Promise((resolve)=>{

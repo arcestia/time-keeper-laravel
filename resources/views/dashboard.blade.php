@@ -17,7 +17,10 @@
                                 <div class="mt-2">
                                     <div class="flex items-center justify-between text-xs text-gray-600">
                                         <div id="db-xp-label">-- / -- XP</div>
-                                        <div id="db-xp-remaining">-- XP to next</div>
+                                        <div class="flex flex-col items-end gap-0.5">
+                                            <div id="db-xp-remaining">-- XP to next</div>
+                                            <div id="db-xp-boost" class="text-[11px] text-emerald-700 hidden"></div>
+                                        </div>
                                     </div>
                                     <div class="mt-1 w-full bg-gray-200 rounded-full h-1 overflow-hidden">
                                         <div id="db-xp-bar" class="h-1 bg-gradient-to-r from-sky-400 to-indigo-600" style="width:0%"></div>
@@ -75,6 +78,7 @@
                             const xpInlineLabel = document.getElementById('db-xp-label');
                             const xpInlineRemain = document.getElementById('db-xp-remaining');
                             const xpInlineBar = document.getElementById('db-xp-bar');
+                            const xpBoostEl = document.getElementById('db-xp-boost');
                             const bars = {
                                 energy: document.getElementById('stat-energy'),
                                 food: document.getElementById('stat-food'),
@@ -212,7 +216,22 @@
                                     if (xpInlineRemain) xpInlineRemain.textContent = rem.toLocaleString() + ' XP to next';
                                     if (xpInlineBar) xpInlineBar.style.width = pct + '%';
                                 } catch (e) {}
-                                
+                                try {
+                                    const rb = await fetch('/api/me/xp-boost', { headers: { 'Accept': 'application/json' } });
+                                    if (rb.ok) {
+                                        const b = await rb.json();
+                                        const bonus = Number(b.bonus_percent || 0);
+                                        if (bonus > 0 && xpBoostEl) {
+                                            const pct = (bonus * 100).toFixed(1);
+                                            xpBoostEl.textContent = `XP Boost: +${pct}%`;
+                                            xpBoostEl.classList.remove('hidden');
+                                        } else if (xpBoostEl) {
+                                            xpBoostEl.textContent = '';
+                                            xpBoostEl.classList.add('hidden');
+                                        }
+                                    }
+                                } catch (e) {}
+
                             }
 
                             setInterval(() => {

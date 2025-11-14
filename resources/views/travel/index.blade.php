@@ -10,7 +10,8 @@
                     <div class="text-center">
                         <div class="text-lg font-semibold">The start of your adventure...</div>
                         <div class="mt-1 text-sm text-gray-600">You emerge from the hole that you call your home and set off on your adventure.</div>
-                        <button id="travel-step" class="mt-6 inline-flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-opacity relative overflow-hidden w-full max-w-md mx-auto">
+                        <div id="travel-xp-boost" class="mt-2 text-xs text-emerald-700 hidden"></div>
+                        <button id="travel-step" class="mt-4 inline-flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-opacity relative overflow-hidden w-full max-w-md mx-auto">
                             <span>Take a step</span>
                             <span id="step-progress" class="absolute left-0 bottom-0 h-1 bg-purple-500" style="width:0%;opacity:0;"></span>
                         </button>
@@ -28,9 +29,28 @@
     <script>
         (() => {
             const btn = document.getElementById('travel-step');
+            const xpBoostEl = document.getElementById('travel-xp-boost');
             const bar = document.getElementById('step-progress');
             const csrf = document.querySelector('meta[name="csrf-token"]').getAttribute('content') || '';
 
+            async function refreshXpBoost() {
+                try {
+                    const res = await fetch('/api/me/xp-boost', { headers: { 'Accept': 'application/json' } });
+                    if (!res.ok) throw new Error();
+                    const b = await res.json();
+                    const bonus = Number(b.bonus_percent || 0);
+                    if (bonus > 0) {
+                        const pct = (bonus * 100).toFixed(1);
+                        xpBoostEl.textContent = `XP Boost: +${pct}%`;
+                        xpBoostEl.classList.remove('hidden');
+                    } else {
+                        xpBoostEl.textContent = '';
+                        xpBoostEl.classList.add('hidden');
+                    }
+                } catch (e) {}
+            }
+
+            refreshXpBoost();
 
             btn.addEventListener('click', async () => {
                 btn.disabled = true;
@@ -108,6 +128,7 @@
                         }
 
                         if (window.toastr && toastMsg) toastr.success(toastMsg);
+                        refreshXpBoost();
                     }
                 } catch(e) {
                     if (window.toastr) toastr.error('Step failed');

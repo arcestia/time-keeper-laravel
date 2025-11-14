@@ -8,6 +8,7 @@ use App\Http\Controllers\JobsController;
 use App\Http\Controllers\StoreController;
 use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\ExpeditionController;
+use App\Http\Controllers\TokenShopController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -42,6 +43,7 @@ Route::middleware('auth')->group(function () {
     // Progress (levels & XP)
     Route::get('/api/me/progress', [\App\Http\Controllers\ProgressController::class, 'me'])->name('progress.me');
     Route::post('/api/me/xp/add', [\App\Http\Controllers\ProgressController::class, 'addXp'])->name('progress.addXp');
+    Route::get('/api/me/xp-boost', [\App\Http\Controllers\ProgressController::class, 'xpBoost'])->name('progress.xp_boost');
 
     // Admin
     Route::get('/admin', [\App\Http\Controllers\AdminController::class, 'page'])->name('admin.page');
@@ -100,6 +102,13 @@ Route::middleware('auth')->group(function () {
     Route::post('/api/expeditions/start/{id}', [ExpeditionController::class, 'start'])->name('expeditions.start');
     Route::post('/api/expeditions/claim/{id}', [ExpeditionController::class, 'claim'])->name('expeditions.claim');
     Route::post('/api/expeditions/claim-all', [ExpeditionController::class, 'claimAll'])->name('expeditions.claim_all');
+
+    // Token Shop
+    Route::get('/token-shop', [TokenShopController::class, 'page'])->name('token_shop.page');
+    Route::get('/api/token-shop/balances', [TokenShopController::class, 'balances'])->name('token_shop.balances');
+    Route::post('/api/token-shop/buy-slot', [TokenShopController::class, 'buySlot'])->name('token_shop.buy_slot');
+    Route::post('/api/token-shop/buy-xp', [TokenShopController::class, 'buyXp'])->name('token_shop.buy_xp');
+    Route::post('/api/token-shop/open-chest', [TokenShopController::class, 'openChest'])->name('token_shop.open_chest');
 
     // Time Keeper stats
     Route::get('/keeper', [TimeKeeperController::class, 'page'])->name('keeper.page');
