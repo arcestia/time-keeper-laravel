@@ -50,15 +50,15 @@ class TravelController extends Controller
             if ($timeMult > 1.0) { $baseTimeSec = max(1, (int) floor($baseTimeSec * $timeMult)); }
         }
 
-        // Decide reward type: XP 59%, time 25%, item 15%, token 1%
+        // Decide reward type: XP 58%, time 25%, item 15%, token 2%
         $roll = random_int(1, 100);
-        if ($roll <= 59) {
+        if ($roll <= 58) {
             $rewardType = 'xp';
-        } elseif ($roll <= 84) { // 60-84
+        } elseif ($roll <= 83) { // 59-83
             $rewardType = 'time';
-        } elseif ($roll <= 99) { // 85-99
+        } elseif ($roll <= 98) { // 84-98
             $rewardType = 'item';
-        } else { // 100
+        } else { // 99-100
             $rewardType = 'token';
         }
 
