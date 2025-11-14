@@ -81,6 +81,7 @@
                         const dxp = Number(awarded.xp || 0);
                         const dt = Number(awarded.time_seconds || 0);
                         const di = awarded.item;
+                        const tk = awarded.token;
 
                         let toastMsg = '';
                         if (type === 'xp') {
@@ -92,6 +93,14 @@
                                 toastMsg = `+${di.qty}x ${di.name}`;
                             } else {
                                 toastMsg = '+Item';
+                            }
+                        } else if (type === 'token') {
+                            if (tk && tk.color) {
+                                const colorLabel = String(tk.color).charAt(0).toUpperCase() + String(tk.color).slice(1);
+                                const qty = Number(tk.qty || 1);
+                                toastMsg = `+${qty}x ${colorLabel} Time Token`;
+                            } else {
+                                toastMsg = '+Time Token';
                             }
                         } else {
                             // Fallback for older responses without type: show combined

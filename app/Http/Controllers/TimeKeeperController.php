@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\TimeAccount;
 use App\Models\User;
 use App\Models\UserTimeWallet;
+use App\Models\UserTimeToken;
 use App\Services\TimeBankService;
 use App\Support\TimeUnits;
 use Illuminate\Http\JsonResponse;
@@ -63,6 +64,19 @@ class TimeKeeperController extends Controller
         // Total steps (all time) across all users
         $totalStepsAll = (int) (\App\Models\UserDailyStat::query()->sum('steps_count'));
 
+        // Time tokens in circulation (global totals by color)
+        $tokenTotals = ['red' => 0, 'blue' => 0, 'green' => 0, 'yellow' => 0, 'black' => 0];
+        UserTimeToken::query()
+            ->select('color', DB::raw('SUM(quantity) as qty'))
+            ->groupBy('color')
+            ->get()
+            ->each(function ($row) use (&$tokenTotals) {
+                $c = strtolower((string) $row->color);
+                if (array_key_exists($c, $tokenTotals)) {
+                    $tokenTotals[$c] = (int) $row->qty;
+                }
+            });
+
         return response()->json([
             'total_users' => $totalUsers,
             'active_users' => $activeWalletUsers,
@@ -85,6 +99,7 @@ class TimeKeeperController extends Controller
             'expeditions_completed' => $expCompleted,
             'total_user_xp' => $totalUserXp,
             'total_steps_all' => $totalStepsAll,
+            'token_totals' => $tokenTotals,
         ]);
     }
 

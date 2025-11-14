@@ -10,6 +10,7 @@ use App\Models\UserInventoryItem;
 use App\Models\StoreItem;
 use App\Services\PremiumService;
 use App\Services\ProgressService;
+use App\Services\TimeTokenService;
 use Carbon\CarbonImmutable;
 
 class TravelController extends Controller
@@ -49,14 +50,16 @@ class TravelController extends Controller
             if ($timeMult > 1.0) { $baseTimeSec = max(1, (int) floor($baseTimeSec * $timeMult)); }
         }
 
-        // Decide reward type: XP 50%, time 30%, item 20%
+        // Decide reward type: XP 59%, time 25%, item 15%, token 1%
         $roll = random_int(1, 100);
-        if ($roll <= 50) {
+        if ($roll <= 59) {
             $rewardType = 'xp';
-        } elseif ($roll <= 80) { // 51-80
+        } elseif ($roll <= 84) { // 60-84
             $rewardType = 'time';
-        } else {
+        } elseif ($roll <= 99) { // 85-99
             $rewardType = 'item';
+        } else { // 100
+            $rewardType = 'token';
         }
 
         $item = null;
@@ -64,6 +67,27 @@ class TravelController extends Controller
         if ($rewardType === 'item') {
             $item = StoreItem::query()->where('is_active', true)->inRandomOrder()->first();
             $itemQty = $item ? random_int(1, 20) : 0;
+        }
+
+        // Token reward: pick color by weights and always give qty=1
+        $token = null;
+        if ($rewardType === 'token') {
+            $tokenRoll = random_int(1, 100);
+            if ($tokenRoll <= 60) {
+                $tokenColor = 'red';
+            } elseif ($tokenRoll <= 85) { // 61-85
+                $tokenColor = 'blue';
+            } elseif ($tokenRoll <= 95) { // 86-95
+                $tokenColor = 'green';
+            } elseif ($tokenRoll <= 99) { // 96-99
+                $tokenColor = 'yellow';
+            } else { // 100
+                $tokenColor = 'black';
+            }
+            $token = [
+                'color' => $tokenColor,
+                'qty' => 1,
+            ];
         }
 
         $xp = 0;
@@ -74,7 +98,7 @@ class TravelController extends Controller
             $timeSec = $baseTimeSec;
         }
 
-        $result = DB::transaction(function () use ($user, $now, $rewardType, $xp, $timeSec, $item, $itemQty) {
+        $result = DB::transaction(function () use ($user, $now, $rewardType, $xp, $timeSec, $item, $itemQty, $token) {
             // Always ensure wallet exists, but only apply time when chosen
             $p = app(ProgressService::class)->getOrCreate($user->id);
             if ($rewardType === 'xp' && $xp > 0) {
@@ -94,6 +118,13 @@ class TravelController extends Controller
             if ($rewardType === 'time' && $timeSec > 0) {
                 $wallet->available_seconds = (int) $wallet->available_seconds + $timeSec;
                 $wallet->save();
+            }
+
+            // Time token credit
+            if ($rewardType === 'token' && $token && ($token['qty'] ?? 0) > 0) {
+                /** @var TimeTokenService $tts */
+                $tts = app(TimeTokenService::class);
+                $tts->credit($user->id, (string) $token['color'], (int) $token['qty']);
             }
 
             $grantedItem = null;
@@ -135,6 +166,7 @@ class TravelController extends Controller
                 'xp' => (int) $xp,
                 'time_seconds' => (int) $timeSec,
                 'item' => $grantedItem,
+                'token' => $token,
             ],
             'progress' => [
                 'level' => (int)$p->level,

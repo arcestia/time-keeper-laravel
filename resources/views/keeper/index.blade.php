@@ -110,6 +110,10 @@
                             <div class="text-sm text-gray-600">Total Steps (All-time)</div>
                             <div id="st-total-steps-all" class="text-xl">-</div>
                         </div>
+                        <div class="p-4 border rounded">
+                            <div class="text-sm text-gray-600">Time Tokens in Circulation</div>
+                            <div id="st-token-totals" class="text-sm text-gray-700 flex flex-wrap gap-2 items-center">-</div>
+                        </div>
                     </div>
 
                     <div id="tab-charts" class="mt-8 hidden">
@@ -220,6 +224,42 @@
                     el('st-avg-bank').textContent = d.avg_bank_formatted;
                     el('st-reserve').textContent = d.reserve_formatted;
                     el('st-reserve-seconds').textContent = d.reserve_seconds + ' seconds';
+                    // Time tokens in circulation (global)
+                    const tt = d.token_totals || {};
+                    const red = tt.red || 0;
+                    const blue = tt.blue || 0;
+                    const green = tt.green || 0;
+                    const yellow = tt.yellow || 0;
+                    const black = tt.black || 0;
+                    const ttEl = el('st-token-totals');
+                    if (ttEl) {
+                        ttEl.innerHTML = `
+                            <span class="inline-flex items-center gap-1">
+                                <i class="fa-solid fa-circle text-red-500 text-[0.6rem]"></i>
+                                <span>Red ${red.toLocaleString()}</span>
+                            </span>
+                            <span class="text-gray-400">·</span>
+                            <span class="inline-flex items-center gap-1">
+                                <i class="fa-solid fa-circle text-blue-500 text-[0.6rem]"></i>
+                                <span>Blue ${blue.toLocaleString()}</span>
+                            </span>
+                            <span class="text-gray-400">·</span>
+                            <span class="inline-flex items-center gap-1">
+                                <i class="fa-solid fa-circle text-green-500 text-[0.6rem]"></i>
+                                <span>Green ${green.toLocaleString()}</span>
+                            </span>
+                            <span class="text-gray-400">·</span>
+                            <span class="inline-flex items-center gap-1">
+                                <i class="fa-solid fa-circle text-yellow-400 text-[0.6rem]"></i>
+                                <span>Yellow ${yellow.toLocaleString()}</span>
+                            </span>
+                            <span class="text-gray-400">·</span>
+                            <span class="inline-flex items-center gap-1">
+                                <i class="fa-solid fa-circle text-gray-800 text-[0.6rem]"></i>
+                                <span>Black ${black.toLocaleString()}</span>
+                            </span>
+                        `;
+                    }
                     // Items & Expeditions
                     el('st-items-inv').textContent = (d.items_inventory_total||0).toLocaleString();
                     el('st-items-sto').textContent = (d.items_storage_total||0).toLocaleString();
