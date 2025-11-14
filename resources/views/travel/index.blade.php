@@ -76,11 +76,29 @@
                         const msg = (d && (d.message || d.error)) ? String(d.message || d.error) : fallback;
                         if (window.toastr) toastr.error(msg);
                     } else {
-                        const dxp = Number(d?.awarded?.xp || 0);
-                        const dt = Number(d?.awarded?.time_seconds || 0);
-                        const di = d?.awarded?.item;
-                        const toastMsg = `+${dxp.toLocaleString()} XP • +${dt.toLocaleString()} sec${di ? ` • +${di.qty}x ${di.name}` : ''}`;
-                        if (window.toastr) toastr.success(toastMsg);
+                        const awarded = d && d.awarded ? d.awarded : {};
+                        const type = awarded.type || null;
+                        const dxp = Number(awarded.xp || 0);
+                        const dt = Number(awarded.time_seconds || 0);
+                        const di = awarded.item;
+
+                        let toastMsg = '';
+                        if (type === 'xp') {
+                            toastMsg = `+${dxp.toLocaleString()} XP`;
+                        } else if (type === 'time') {
+                            toastMsg = `+${dt.toLocaleString()} sec`;
+                        } else if (type === 'item') {
+                            if (di) {
+                                toastMsg = `+${di.qty}x ${di.name}`;
+                            } else {
+                                toastMsg = '+Item';
+                            }
+                        } else {
+                            // Fallback for older responses without type: show combined
+                            toastMsg = `+${dxp.toLocaleString()} XP • +${dt.toLocaleString()} sec${di ? ` • +${di.qty}x ${di.name}` : ''}`;
+                        }
+
+                        if (window.toastr && toastMsg) toastr.success(toastMsg);
                     }
                 } catch(e) {
                     if (window.toastr) toastr.error('Step failed');

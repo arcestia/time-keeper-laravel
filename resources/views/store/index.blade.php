@@ -73,10 +73,7 @@
             }
             function fmtCompact(sec) {
                 sec = Math.max(0, parseInt(sec || 0, 10));
-                const MIL = 31536000000, CEN = 3153600000, DEC = 315360000, Y = 31536000, W = 604800, D = 86400;
-                const mil = Math.floor(sec / MIL); sec %= MIL;
-                const cen = Math.floor(sec / CEN); sec %= CEN;
-                const dec = Math.floor(sec / DEC); sec %= DEC;
+                const Y = 31536000, W = 604800, D = 86400;
                 const y   = Math.floor(sec / Y);   sec %= Y;
                 const w   = Math.floor(sec / W);   sec %= W;
                 const dd  = Math.floor(sec / D);   sec %= D;
@@ -84,9 +81,6 @@
                 const mm  = Math.floor(sec / 60);
                 const ss  = sec % 60;
                 return [
-                    String(mil).padStart(3,'0'),
-                    String(cen).padStart(3,'0'),
-                    String(dec).padStart(3,'0'),
                     String(y).padStart(3,'0'),
                     String(w).padStart(2,'0'),
                     String(dd).padStart(2,'0'),
