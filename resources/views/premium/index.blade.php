@@ -58,7 +58,21 @@
                             <button data-preset="1d" class="px-2 py-1 rounded border text-gray-700 hover:bg-gray-50">1d</button>
                             <button data-preset="7d" class="px-2 py-1 rounded border text-gray-700 hover:bg-gray-50">7d</button>
                         </div>
-                        <div class="mt-2 text-xs text-gray-500">Payment source: Bank balance only</div>
+                        <div class="mt-3 text-sm">
+                            <div class="text-gray-600 mb-1">Pay from</div>
+                            <div class="flex items-center gap-6">
+                                <label class="inline-flex items-center gap-2 text-gray-700">
+                                    <input type="radio" name="pm-src" id="pm-src-bank" value="bank" checked>
+                                    <span>Bank</span>
+                                    <span class="text-xs text-gray-500">(<span id="pm-bank-balance">-</span>)</span>
+                                </label>
+                                <label class="inline-flex items-center gap-2 text-gray-700">
+                                    <input type="radio" name="pm-src" id="pm-src-wallet" value="wallet">
+                                    <span>Wallet</span>
+                                    <span class="text-xs text-gray-500">(<span id="pm-wallet-balance">-</span>)</span>
+                                </label>
+                            </div>
+                        </div>
                     </div>
 
                     <div id="pm-heal-card" class="mt-4 p-4 border rounded">
@@ -148,26 +162,47 @@
                                 pmActive = !!d.active; pmLifetime = !!d.lifetime; pmRemaining = parseInt(d.active_seconds||0,10)||0;
                             }
                             load();
+                            function getSource(){
+                                // Prefer landing selection if visible
+                                const landing = document.getElementById('pm-landing');
+                                const bL=document.getElementById('pm-src-bank-landing');
+                                const wL=document.getElementById('pm-src-wallet-landing');
+                                if (landing && !landing.classList.contains('hidden')){
+                                    if (wL && wL.checked) return 'wallet';
+                                    if (bL && bL.checked) return 'bank';
+                                }
+                                // Fallback to active buy card
+                                const bA=document.getElementById('pm-src-bank');
+                                const wA=document.getElementById('pm-src-wallet');
+                                if (wA && wA.checked) return 'wallet';
+                                if (bA && bA.checked) return 'bank';
+                                // Final fallback
+                                return 'bank';
+                            }
                             // Buy button uses preview+confirm
                             document.getElementById('pm-buy').addEventListener('click', async () => {
                                 const status = document.getElementById('pm-buy-status');
                                 const amount = document.getElementById('pm-amount').value.trim();
+                                const source = getSource();
                                 status.textContent = 'Checking...';
                                 try {
-                                    const prev = await fetch('/api/premium/preview', { method:'POST', headers: { 'Accept':'application/json','Content-Type':'application/json','X-Requested-With':'XMLHttpRequest','X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content }, body: JSON.stringify({ amount }) });
+                                    const prev = await fetch('/api/premium/preview', { method:'POST', headers: { 'Accept':'application/json','Content-Type':'application/json','X-Requested-With':'XMLHttpRequest','X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content }, body: JSON.stringify({ amount, source }) });
                                     const p = await prev.json();
                                     if (!prev.ok || !p.ok) throw new Error(p.message||'Invalid amount');
                                     let proceed = true;
-                                    const html = `Duration: <strong>${amount}</strong><br>Premium seconds: <strong>${p.seconds}</strong><br>Cost (Bank): <strong>${p.cost_seconds} sec</strong><br>Bank balance: <strong>${p.bank_seconds} sec</strong>`;
+                                    document.getElementById('pm-bank-balance').textContent = (p.bank_seconds||0).toLocaleString()+' sec';
+                                    document.getElementById('pm-wallet-balance').textContent = (p.wallet_seconds||0).toLocaleString()+' sec';
+                                    const label = (p.source==='wallet'?'Wallet':'Bank');
+                                    const html = `Duration: <strong>${amount}</strong><br>Premium seconds: <strong>${p.seconds}</strong><br>Cost (${label}): <strong>${p.cost_seconds} sec</strong><br>Bank balance: <strong>${p.bank_seconds} sec</strong><br>Wallet balance: <strong>${p.wallet_seconds} sec</strong>`;
                                     if (window.Swal){
                                         const { isConfirmed } = await Swal.fire({ title: 'Confirm Purchase', html, icon: (p.can_afford?'question':'warning'), showCancelButton: true, confirmButtonText: p.can_afford ? 'Buy' : 'Buy Anyway' });
                                         proceed = isConfirmed;
                                     } else {
-                                        proceed = window.confirm(`Confirm purchase?\n${amount} (${p.seconds}s)\nCost: ${p.cost_seconds}s from Bank`);
+                                        proceed = window.confirm(`Confirm purchase?\n${amount} (${p.seconds}s)\nCost: ${p.cost_seconds}s from ${label}`);
                                     }
                                     if (!proceed) { status.textContent = ''; return; }
                                     status.textContent = 'Processing...';
-                                    const res = await fetch('/api/premium/buy', { method:'POST', headers: { 'Accept':'application/json','Content-Type':'application/json','X-Requested-With':'XMLHttpRequest','X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content }, body: JSON.stringify({ amount }) });
+                                    const res = await fetch('/api/premium/buy', { method:'POST', headers: { 'Accept':'application/json','Content-Type':'application/json','X-Requested-With':'XMLHttpRequest','X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content }, body: JSON.stringify({ amount, source }) });
                                     const data = await res.json();
                                     if (!res.ok || !data.ok) throw new Error(data.message||'Failed');
                                     status.textContent = 'Purchased';
@@ -190,16 +225,22 @@
                             const joinBtn = document.getElementById('pm-join-btn');
                             joinBtn.addEventListener('click', async () => {
                                 let amount = '';
+                                let source = getSource();
                                 if (window.Swal) {
-                                    const { value } = await Swal.fire({
-                                        title: 'Purchase Premium',
-                                        input: 'text',
-                                        inputLabel: 'Enter duration (e.g. 1d 2h or 3600) — paid from Bank balance',
-                                        inputPlaceholder: 'e.g. 1d 2h or 3600',
-                                        showCancelButton: true,
-                                        confirmButtonText: 'Buy',
-                                    });
-                                    amount = value || '';
+                                    const html = `
+                                        <div class=\"text-left\">
+                                            <label class=\"block text-sm text-gray-700 mb-1\">Enter duration</label>
+                                            <input id=\"swal-amount\" type=\"text\" class=\"swal2-input\" placeholder=\"e.g. 1d 2h or 3600\" style=\"width: calc(100% - 2em)\" />
+                                            <div class=\"mt-2 text-sm\">Pay from</div>
+                                            <div class=\"flex items-center gap-6 mt-1\">
+                                                <label class=\"inline-flex items-center gap-2\"><input type=\"radio\" name=\"swal-src\" id=\"swal-src-bank\" value=\"bank\" ${source==='bank'?'checked':''}> Bank</label>
+                                                <label class=\"inline-flex items-center gap-2\"><input type=\"radio\" name=\"swal-src\" id=\"swal-src-wallet\" value=\"wallet\" ${source==='wallet'?'checked':''}> Wallet</label>
+                                            </div>
+                                        </div>`;
+                                    const res = await Swal.fire({ title: 'Purchase Premium', html, focusConfirm: false, showCancelButton: true, confirmButtonText: 'Buy', didOpen: () => { const inp = document.getElementById('swal-amount'); if (inp) inp.focus(); } });
+                                    if (!res.isConfirmed) return;
+                                    amount = (document.getElementById('swal-amount')?.value || '').trim();
+                                    source = (document.getElementById('swal-src-wallet')?.checked ? 'wallet' : 'bank');
                                 } else {
                                     amount = window.prompt('Enter premium duration (e.g. 1d 2h or 3600)') || '';
                                 }
@@ -207,20 +248,25 @@
                                 const status = document.getElementById('pm-buy-status');
                                 status.textContent = 'Checking...';
                                 try {
-                                    const prev = await fetch('/api/premium/preview', { method:'POST', headers: { 'Accept':'application/json','Content-Type':'application/json','X-Requested-With':'XMLHttpRequest','X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content }, body: JSON.stringify({ amount }) });
+                                    // Use selection from modal if provided; otherwise fallback
+                                    source = source || getSource();
+                                    const prev = await fetch('/api/premium/preview', { method:'POST', headers: { 'Accept':'application/json','Content-Type':'application/json','X-Requested-With':'XMLHttpRequest','X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content }, body: JSON.stringify({ amount, source }) });
                                     const p = await prev.json();
                                     if (!prev.ok || !p.ok) throw new Error(p.message||'Invalid amount');
                                     let proceed = true;
-                                    const html = `Duration: <strong>${amount}</strong><br>Premium seconds: <strong>${p.seconds}</strong><br>Cost (Bank): <strong>${p.cost_seconds} sec</strong><br>Bank balance: <strong>${p.bank_seconds} sec</strong>`;
+                                    document.getElementById('pm-bank-balance').textContent = (p.bank_seconds||0).toLocaleString()+' sec';
+                                    document.getElementById('pm-wallet-balance').textContent = (p.wallet_seconds||0).toLocaleString()+' sec';
+                                    const label = (p.source==='wallet'?'Wallet':'Bank');
+                                    const html = `Duration: <strong>${amount}</strong><br>Premium seconds: <strong>${p.seconds}</strong><br>Cost (${label}): <strong>${p.cost_seconds} sec</strong><br>Bank balance: <strong>${p.bank_seconds} sec</strong><br>Wallet balance: <strong>${p.wallet_seconds} sec</strong>`;
                                     if (window.Swal){
                                         const { isConfirmed } = await Swal.fire({ title: 'Confirm Purchase', html, icon: (p.can_afford?'question':'warning'), showCancelButton: true, confirmButtonText: p.can_afford ? 'Buy' : 'Buy Anyway' });
                                         proceed = isConfirmed;
                                     } else {
-                                        proceed = window.confirm(`Confirm purchase?\n${amount} (${p.seconds}s)\nCost: ${p.cost_seconds}s from Bank`);
+                                        proceed = window.confirm(`Confirm purchase?\n${amount} (${p.seconds}s)\nCost: ${p.cost_seconds}s from ${label}`);
                                     }
                                     if (!proceed) { status.textContent = ''; return; }
                                     status.textContent = 'Processing...';
-                                    const res = await fetch('/api/premium/buy', { method:'POST', headers: { 'Accept':'application/json','Content-Type':'application/json','X-Requested-With':'XMLHttpRequest','X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content }, body: JSON.stringify({ amount }) });
+                                    const res = await fetch('/api/premium/buy', { method:'POST', headers: { 'Accept':'application/json','Content-Type':'application/json','X-Requested-With':'XMLHttpRequest','X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content }, body: JSON.stringify({ amount, source }) });
                                     const data = await res.json();
                                     if (!res.ok || !data.ok) throw new Error(data.message||'Failed');
                                     status.textContent = 'Purchased';

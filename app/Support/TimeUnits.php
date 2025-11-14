@@ -128,21 +128,15 @@ class TimeUnits
     }
 
     /**
-     * Compact colon format MIL:CEN:DEC:Y:W:DD:HH:MM:SS
+     * Compact colon format Y:W:DD:HH:MM:SS
      */
     public static function compactColon(int $seconds): string
     {
         $s = max(0, (int) $seconds);
-        $MIL = 31536000000; // 1000 years
-        $CEN = 3153600000;  // 100 years
-        $DEC = 315360000;   // 10 years
         $Y   = 31536000;    // 1 year (365d)
         $W   = 604800;      // 7 days
         $D   = 86400;       // 1 day
 
-        $mil = intdiv($s, $MIL); $s %= $MIL;
-        $cen = intdiv($s, $CEN); $s %= $CEN;
-        $dec = intdiv($s, $DEC); $s %= $DEC;
         $y   = intdiv($s, $Y);   $s %= $Y;
         $w   = intdiv($s, $W);   $s %= $W;
         $dd  = intdiv($s, $D);   $s %= $D;
@@ -150,9 +144,6 @@ class TimeUnits
         $mm  = intdiv($s, 60);   $ss = $s % 60;
 
         return implode(':', [
-            str_pad((string)$mil, 3, '0', STR_PAD_LEFT),
-            str_pad((string)$cen, 3, '0', STR_PAD_LEFT),
-            str_pad((string)$dec, 3, '0', STR_PAD_LEFT),
             str_pad((string)$y, 3, '0', STR_PAD_LEFT),
             str_pad((string)$w, 2, '0', STR_PAD_LEFT),
             str_pad((string)$dd, 2, '0', STR_PAD_LEFT),

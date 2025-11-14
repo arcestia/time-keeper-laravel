@@ -8,8 +8,10 @@ use Illuminate\Support\Facades\DB;
 use Carbon\CarbonImmutable;
 use Flasher\Laravel\Facade\Flasher;
 use App\Services\PremiumService;
+use App\Services\TimeBankService;
 use App\Models\Premium;
 use App\Models\TimeAccount;
+use App\Models\UserTimeWallet;
 use App\Models\UserStats;
 use App\Models\Setting;
 
@@ -24,6 +26,7 @@ class PremiumController extends Controller
     {
         $user = Auth::user();
         $amountStr = (string) request()->input('amount', '');
+        $source = (string) request()->input('source', 'bank');
         $seconds = \App\Support\TimeUnits::parseToSeconds($amountStr) ?? 0;
         if ($seconds <= 0) {
             return response()->json(['ok' => false, 'message' => 'Invalid amount'], 422);
@@ -36,12 +39,22 @@ class PremiumController extends Controller
         $cost = (int) ceil($seconds * $bankUnit / $premUnit);
         $bank = TimeAccount::where('user_id', $user->id)->first();
         $bankSeconds = (int)($bank->base_balance_seconds ?? 0);
+        // Wallet display balance accounts for decay
+        $wallet = UserTimeWallet::where('user_id', $user->id)->first();
+        $walletDisplay = 0;
+        if ($wallet) {
+            $svc = app(TimeBankService::class);
+            $walletDisplay = (int) $svc->getWalletDisplayBalance($wallet);
+        }
+        $canAfford = $source === 'wallet' ? ($walletDisplay >= $cost) : ($bankSeconds >= $cost);
         return response()->json([
             'ok' => true,
             'seconds' => (int)$seconds,
             'cost_seconds' => (int)$cost,
             'bank_seconds' => $bankSeconds,
-            'can_afford' => $bankSeconds >= $cost,
+            'wallet_seconds' => $walletDisplay,
+            'source' => $source,
+            'can_afford' => $canAfford,
         ]);
     }
 
@@ -94,6 +107,7 @@ class PremiumController extends Controller
     {
         $user = Auth::user();
         $amountStr = (string) request()->input('amount', '');
+        $source = (string) request()->input('source', 'bank'); // 'bank' or 'wallet'
         // Parse simple formats; reuse TimeUnits if available, else seconds integer
         $seconds = \App\Support\TimeUnits::parseToSeconds($amountStr) ?? 0;
         if ($seconds <= 0) {
@@ -107,24 +121,47 @@ class PremiumController extends Controller
         }
         [$premUnit, $bankUnit] = $this->ratio();
         $cost = (int) ceil($seconds * $bankUnit / $premUnit);
+        if ($source !== 'wallet') { $source = 'bank'; }
 
-        $result = DB::transaction(function () use ($user, $seconds, $cost) {
+        $result = DB::transaction(function () use ($user, $seconds, $cost, $source) {
             $bank = TimeAccount::query()->where('user_id', $user->id)->lockForUpdate()->first();
             if (!$bank) { $bank = TimeAccount::create(['user_id' => $user->id, 'base_balance_seconds' => 0]); }
-            if ((int)$bank->base_balance_seconds < $cost) {
-                Flasher::addError('Not enough bank balance');
-                abort(422, 'Not enough bank balance');
+
+            $wallet = UserTimeWallet::query()->where('user_id', $user->id)->lockForUpdate()->first();
+            if (!$wallet) {
+                $wallet = UserTimeWallet::create(['user_id' => $user->id, 'available_seconds' => 0, 'is_active' => false, 'drain_rate' => 1.000]);
             }
-            $bank->base_balance_seconds = (int)$bank->base_balance_seconds - $cost;
-            $bank->save();
+
+            if ($source === 'wallet') {
+                $svc = app(TimeBankService::class);
+                // Settle wallet to reflect current display balance
+                $svc->settleWallet($wallet);
+                $wallet->refresh();
+                $display = $svc->getWalletDisplayBalance($wallet);
+                if ($display < $cost) {
+                    Flasher::addError('Not enough wallet balance');
+                    abort(422, 'Not enough wallet balance');
+                }
+                // Deduct from wallet
+                $wallet->available_seconds = (int) $wallet->available_seconds - $cost;
+                if ($wallet->available_seconds < 0) { $wallet->available_seconds = 0; }
+                $wallet->save();
+            } else {
+                if ((int)$bank->base_balance_seconds < $cost) {
+                    Flasher::addError('Not enough bank balance');
+                    abort(422, 'Not enough bank balance');
+                }
+                $bank->base_balance_seconds = (int)$bank->base_balance_seconds - $cost;
+                $bank->save();
+            }
 
             $p = PremiumService::getOrCreate($user->id);
             PremiumService::grant($p, $seconds);
 
-            return [$bank, $p, $cost, $seconds];
+            return [$bank, $wallet, $p, $cost, $seconds, $source];
         });
 
-        [$bank, $p, $cost, $seconds] = $result;
+        [$bank, $wallet, $p, $cost, $seconds, $source] = $result;
         // Refresh to ensure we have the committed expiration
         $p->refresh();
         Flasher::addSuccess('Premium purchased');
@@ -135,6 +172,8 @@ class PremiumController extends Controller
             'premium_active_seconds' => (int) PremiumService::remainingSeconds($p),
             'premium_tier' => PremiumService::tierFor((int)$p->premium_seconds_accumulated),
             'bank_seconds' => (int)$bank->base_balance_seconds,
+            'wallet_seconds' => (int) app(TimeBankService::class)->getWalletDisplayBalance($wallet->fresh()),
+            'source' => $source,
         ]);
     }
 
