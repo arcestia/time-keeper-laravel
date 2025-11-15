@@ -79,6 +79,7 @@ class GuildController extends Controller
                         'user_id' => $gm->user_id,
                         'username' => optional($gm->user)->username,
                         'role' => $gm->role,
+                        'contribution_xp' => (int) ($gm->contribution_xp ?? 0),
                     ];
                 })->all(),
                 'join_requests' => $joinRequests,
