@@ -143,6 +143,7 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/api/guilds/requests/{id}/approve', [GuildController::class, 'approveRequest'])->name('guilds.requests.approve');
     Route::post('/api/guilds/requests/{id}/deny', [GuildController::class, 'denyRequest'])->name('guilds.requests.deny');
     Route::post('/api/guilds/members/{id}/role', [GuildController::class, 'updateMemberRole'])->name('guilds.members.role');
+    Route::post('/api/guilds/transfer-leadership', [GuildController::class, 'transferLeadership'])->name('guilds.transfer_leadership');
     Route::post('/api/guilds/{id}/lock', [GuildController::class, 'adminLock'])->name('guilds.admin.lock');
     Route::post('/api/guilds/{id}/unlock', [GuildController::class, 'adminUnlock'])->name('guilds.admin.unlock');
 

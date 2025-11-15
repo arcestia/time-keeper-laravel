@@ -43,7 +43,7 @@ class GuildController extends Controller
             ->get();
 
         $joinRequests = [];
-        if ($member->role === 'leader') {
+        if (in_array($member->role, ['leader','co-leader'], true)) {
             $joinRequests = GuildJoinRequest::with('user')
                 ->where('guild_id', $guild->id)
                 ->where('status', 'pending')
@@ -370,6 +370,46 @@ class GuildController extends Controller
         return response()->json(['ok' => true]);
     }
 
+    public function transferLeadership(Request $request): JsonResponse
+    {
+        $user = Auth::user();
+        abort_unless($user, 403);
+
+        $data = $request->validate([
+            'target_member_id' => ['required','integer','min:1'],
+        ]);
+
+        return DB::transaction(function () use ($user, $data) {
+            $actor = GuildMember::with('guild')->where('user_id', $user->id)->lockForUpdate()->first();
+            if (!$actor || $actor->role !== 'leader' || !$actor->guild) {
+                return response()->json(['ok' => false, 'message' => 'Only the guild leader can transfer leadership'], 422);
+            }
+            $guild = Guild::lockForUpdate()->findOrFail($actor->guild_id);
+            if ($guild->is_locked) {
+                return response()->json(['ok' => false, 'message' => 'Guild is locked'], 422);
+            }
+            $target = GuildMember::lockForUpdate()->findOrFail((int)$data['target_member_id']);
+            if ($target->guild_id !== $guild->id) {
+                return response()->json(['ok' => false, 'message' => 'Target is not in your guild'], 422);
+            }
+            if ($target->user_id === $user->id) {
+                return response()->json(['ok' => false, 'message' => 'Cannot transfer to yourself'], 422);
+            }
+
+            // Perform transfer
+            $guild->owner_user_id = (int)$target->user_id;
+            $guild->save();
+
+            $actor->role = 'co-leader';
+            $actor->save();
+
+            $target->role = 'leader';
+            $target->save();
+
+            return response()->json(['ok' => true, 'new_leader_user_id' => (int)$target->user_id]);
+        });
+    }
+
     public function updateVisibility(Request $request): JsonResponse
     {
         $user = Auth::user();
@@ -381,8 +421,8 @@ class GuildController extends Controller
         ]);
 
         $member = GuildMember::where('user_id', $user->id)->first();
-        if (!$member || $member->role !== 'leader' || $member->guild_id !== $data['guild_id']) {
-            return response()->json(['ok' => false, 'message' => 'Only the guild leader can change visibility'], 422);
+        if (!$member || !in_array($member->role, ['leader','co-leader'], true) || $member->guild_id !== $data['guild_id']) {
+            return response()->json(['ok' => false, 'message' => 'Only leader or co-leader can change visibility'], 422);
         }
 
         $guild = Guild::findOrFail($data['guild_id']);
@@ -404,7 +444,7 @@ class GuildController extends Controller
             }
 
             $member = GuildMember::where('user_id', $user->id)->lockForUpdate()->first();
-            if (!$member || !in_array($member->role, ['leader','officer'], true) || $member->guild_id !== $req->guild_id) {
+            if (!$member || !in_array($member->role, ['leader','co-leader','officer'], true) || $member->guild_id !== $req->guild_id) {
                 return response()->json(['ok' => false, 'message' => 'Only leader or officer can approve'], 422);
             }
 
@@ -446,7 +486,7 @@ class GuildController extends Controller
 
         $req = GuildJoinRequest::findOrFail($id);
         $member = GuildMember::where('user_id', $user->id)->first();
-        if (!$member || !in_array($member->role, ['leader','officer'], true) || $member->guild_id !== $req->guild_id) {
+        if (!$member || !in_array($member->role, ['leader','co-leader','officer'], true) || $member->guild_id !== $req->guild_id) {
             return response()->json(['ok' => false, 'message' => 'Only leader or officer can deny'], 422);
         }
         $req->status = 'denied';
@@ -461,13 +501,13 @@ class GuildController extends Controller
         abort_unless($user, 403);
 
         $data = $request->validate([
-            'role' => ['required','string','in:member,officer'],
+            'role' => ['required','string','in:member,officer,co-leader'],
         ]);
 
         return DB::transaction(function () use ($user, $id, $data) {
             $actor = GuildMember::where('user_id', $user->id)->lockForUpdate()->first();
-            if (!$actor || $actor->role !== 'leader') {
-                return response()->json(['ok' => false, 'message' => 'Only the guild leader can change roles'], 422);
+            if (!$actor || !in_array($actor->role, ['leader','co-leader'], true)) {
+                return response()->json(['ok' => false, 'message' => 'Only leader or co-leader can change roles'], 422);
             }
 
             $target = GuildMember::lockForUpdate()->findOrFail($id);
@@ -476,6 +516,11 @@ class GuildController extends Controller
             }
             if ($target->role === 'leader') {
                 return response()->json(['ok' => false, 'message' => 'Cannot change leader role'], 422);
+            }
+
+            // Co-leader limits: cannot assign co-leader role; leader can assign any except changing leader
+            if ($actor->role === 'co-leader' && $data['role'] === 'co-leader') {
+                return response()->json(['ok' => false, 'message' => 'Co-leader cannot assign co-leader role'], 422);
             }
 
             $target->role = $data['role'];

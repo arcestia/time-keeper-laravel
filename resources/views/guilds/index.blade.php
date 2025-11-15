@@ -41,6 +41,22 @@
                                 <div class="space-x-2">
                                     <button id="guild-leave" class="px-3 py-1.5 bg-gray-200 hover:bg-gray-300 text-xs rounded">Leave</button>
                                     <button id="guild-disband" class="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-xs text-white rounded hidden">Disband</button>
+                                    <button id="guild-transfer-open" class="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-xs text-white rounded hidden">Transfer</button>
+                                </div>
+                            </div>
+                            <div id="guild-transfer-modal" class="hidden fixed inset-0 z-50 items-center justify-center">
+                                <div class="absolute inset-0 bg-black/40"></div>
+                                <div class="relative bg-white rounded shadow p-4 w-full max-w-md mx-auto">
+                                    <div class="text-sm font-semibold mb-2">Transfer leadership</div>
+                                    <div class="space-y-3">
+                                        <label class="text-sm text-gray-700">Select member</label>
+                                        <select id="gtm-select" class="w-full border rounded px-2 py-1 text-sm"></select>
+                                        <div class="flex items-center justify-end gap-2 pt-2">
+                                            <button id="gtm-cancel" class="px-3 py-1.5 text-sm rounded border">Cancel</button>
+                                            <button id="gtm-confirm" class="px-3 py-1.5 text-sm rounded bg-amber-600 text-white">Transfer</button>
+                                        </div>
+                                        <div id="gtm-status" class="text-xs text-gray-500"></div>
+                                    </div>
                                 </div>
                             </div>
                             <div>
@@ -239,6 +255,14 @@
                                     const g = data.guild;
                                     myGuildId = g.id;
                                     const members = Array.isArray(g.members) ? g.members : [];
+                                    const roleOrder = { 'leader': 0, 'co-leader': 1, 'officer': 2, 'member': 3 };
+                                    members.sort((a,b)=>{
+                                        const ra = roleOrder[a.role] ?? 9; const rb = roleOrder[b.role] ?? 9;
+                                        if (ra !== rb) return ra - rb;
+                                        const ua = (a.username || '').toLowerCase(); const ub = (b.username || '').toLowerCase();
+                                        if (ua !== ub) return ua.localeCompare(ub);
+                                        return (a.id||0) - (b.id||0);
+                                    });
                                     const me = members.find(m => m.user_id === data.me_id) || null;
                                     myRole = me ? me.role : null;
 
@@ -265,6 +289,8 @@
                                         let roleCls = 'px-2 py-0.5 rounded-full text-xs';
                                         if (m.role === 'leader') {
                                             roleCls += ' bg-indigo-100 text-indigo-700';
+                                        } else if (m.role === 'co-leader') {
+                                            roleCls += ' bg-purple-100 text-purple-700';
                                         } else if (m.role === 'officer') {
                                             roleCls += ' bg-emerald-100 text-emerald-700';
                                         } else {
@@ -273,22 +299,36 @@
                                         role.className = roleCls;
                                         role.textContent = m.role;
                                         right.appendChild(role);
-                                        if (myRole === 'leader' && m.role !== 'leader') {
-                                            const btn = document.createElement('button');
-                                            btn.className = 'px-2 py-0.5 text-xs rounded border border-gray-300 hover:bg-gray-100';
-                                            const isOfficer = m.role === 'officer';
-                                            btn.textContent = isOfficer ? 'Demote' : 'Promote';
-                                            btn.addEventListener('click', async () => {
-                                                guildStatus.textContent = isOfficer ? 'Demoting member...' : 'Promoting member...';
+                                        // Role management: leader can assign member/officer/co-leader; co-leader can assign member/officer only
+                                        if ((myRole === 'leader' || myRole === 'co-leader') && m.role !== 'leader') {
+                                            const wrap = document.createElement('span');
+                                            wrap.className = 'inline-flex items-center gap-1';
+                                            const sel = document.createElement('select');
+                                            sel.className = 'text-xs border rounded';
+                                            const opts = [];
+                                            opts.push({v:'member', t:'Member'});
+                                            opts.push({v:'officer', t:'Officer'});
+                                            if (myRole === 'leader') { opts.push({v:'co-leader', t:'Co-leader'}); }
+                                            sel.innerHTML = opts.map(o=>`<option value="${o.v}">${o.t}</option>`).join('');
+                                            sel.value = m.role;
+                                            const applyBtn = document.createElement('button');
+                                            applyBtn.className = 'px-2 py-0.5 text-xs rounded border border-gray-300 hover:bg-gray-100';
+                                            applyBtn.textContent = 'Apply';
+                                            applyBtn.addEventListener('click', async () => {
+                                                const newRole = sel.value;
+                                                if (newRole === m.role) return;
+                                                guildStatus.textContent = 'Updating role...';
                                                 try {
-                                                    await postJSON(`/api/guilds/members/${m.id}/role`, { role: isOfficer ? 'member' : 'officer' });
+                                                    await postJSON(`/api/guilds/members/${m.id}/role`, { role: newRole });
                                                     guildStatus.textContent = 'Role updated';
                                                     await loadMyGuild();
                                                 } catch (e) {
                                                     guildStatus.textContent = e.message || 'Failed to update role';
                                                 }
                                             });
-                                            right.appendChild(btn);
+                                            wrap.appendChild(sel);
+                                            wrap.appendChild(applyBtn);
+                                            right.appendChild(wrap);
                                         }
                                         li.appendChild(label);
                                         li.appendChild(right);
@@ -324,9 +364,9 @@
                                         }
                                     }
 
-                                    // Visibility toggle only for leader
+                                    // Visibility toggle for leader/co-leader
                                     if (guildVisibilityRow && guildVisibility) {
-                                        if (myRole === 'leader') {
+                                        if (myRole === 'leader' || myRole === 'co-leader') {
                                             guildVisibilityRow.classList.remove('hidden');
                                             guildVisibility.value = g.is_private ? '1' : '0';
                                         } else {
@@ -348,11 +388,46 @@
                                         guildDisbandBtn.classList.add('hidden');
                                     }
 
-                                    // Pending join requests (leader only)
+                                    const transferOpen = document.getElementById('guild-transfer-open');
+                                    const modal = document.getElementById('guild-transfer-modal');
+                                    const sel = document.getElementById('gtm-select');
+                                    const btnOk = document.getElementById('gtm-confirm');
+                                    const btnCancel = document.getElementById('gtm-cancel');
+                                    const mStatus = document.getElementById('gtm-status');
+                                    if (transferOpen && modal && sel && btnOk && btnCancel) {
+                                        if (myRole === 'leader') {
+                                            transferOpen.classList.remove('hidden');
+                                            transferOpen.onclick = () => {
+                                                sel.innerHTML = members.filter(m => m.role !== 'leader').map(m => `<option value="${m.id}">${m.username || ('User #'+m.user_id)} (${m.role})</option>`).join('');
+                                                mStatus.textContent = '';
+                                                modal.classList.remove('hidden');
+                                                modal.classList.add('flex');
+                                            };
+                                            btnCancel.onclick = () => { modal.classList.add('hidden'); modal.classList.remove('flex'); };
+                                            modal.addEventListener('click', (e)=>{ if (e.target===modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); }});
+                                            btnOk.onclick = async () => {
+                                                const targetId = parseInt(sel.value || '0', 10) || 0;
+                                                if (!targetId) return;
+                                                mStatus.textContent = 'Transferring...';
+                                                try {
+                                                    await postJSON('/api/guilds/transfer-leadership', { target_member_id: targetId });
+                                                    mStatus.textContent = 'Done';
+                                                    modal.classList.add('hidden'); modal.classList.remove('flex');
+                                                    await loadMyGuild();
+                                                } catch (e) {
+                                                    mStatus.textContent = e.message || 'Failed to transfer';
+                                                }
+                                            };
+                                        } else {
+                                            transferOpen.classList.add('hidden');
+                                        }
+                                    }
+
+                                    // Pending join requests (leader, co-leader, officer)
                                     if (guildRequestsSection && guildRequestsList) {
                                         guildRequestsList.innerHTML = '';
                                         const reqs = Array.isArray(g.join_requests) ? g.join_requests : [];
-                                        if (myRole === 'leader' && reqs.length > 0) {
+                                        if ((myRole === 'leader' || myRole === 'co-leader' || myRole === 'officer') && reqs.length > 0) {
                                             guildRequestsSection.classList.remove('hidden');
                                             for (const r of reqs) {
                                                 const li = document.createElement('li');
