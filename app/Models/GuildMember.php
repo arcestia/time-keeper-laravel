@@ -14,11 +14,13 @@ class GuildMember extends Model
         'guild_id',
         'user_id',
         'role',
+        'contribution_xp',
     ];
 
     protected $casts = [
         'guild_id' => 'integer',
         'user_id' => 'integer',
+        'contribution_xp' => 'integer',
     ];
 
     public function guild(): BelongsTo

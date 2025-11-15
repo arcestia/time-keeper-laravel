@@ -47,6 +47,10 @@
                                 <div class="text-sm font-medium text-gray-700 mb-1">Members</div>
                                 <ul id="guild-members" class="border rounded divide-y text-sm"></ul>
                             </div>
+                            <div class="mt-3">
+                                <div class="text-sm font-medium text-gray-700 mb-1">Member Contribution Leaderboard</div>
+                                <ul id="guild-contrib" class="border rounded divide-y text-xs"></ul>
+                            </div>
                             <div id="guild-donate" class="mt-3 space-y-2">
                                 <div class="text-sm font-medium text-gray-700">Donate Tokens to Guild</div>
                                 <div class="flex flex-wrap items-end gap-2 text-xs">
@@ -160,6 +164,7 @@
                             const guildMeta = document.getElementById('guild-meta');
                             const guildLevelText = document.getElementById('guild-level');
                             const guildMembers = document.getElementById('guild-members');
+                            const guildContrib = document.getElementById('guild-contrib');
                             const guildLeaveBtn = document.getElementById('guild-leave');
                             const guildDisbandBtn = document.getElementById('guild-disband');
                             const guildVisibilityRow = document.getElementById('guild-visibility-row');
@@ -248,6 +253,7 @@
                                         guildLevelText.textContent = `Level ${lvl} • ${xp.toLocaleString()} / ${nx.toLocaleString()} XP (Total: ${tot.toLocaleString()})`;
                                     }
                                     guildMembers.innerHTML = '';
+                                    if (guildContrib) guildContrib.innerHTML = '';
                                     for (const m of members) {
                                         const li = document.createElement('li');
                                         li.className = 'px-3 py-1 flex items-center justify-between';
@@ -287,6 +293,35 @@
                                         li.appendChild(label);
                                         li.appendChild(right);
                                         guildMembers.appendChild(li);
+                                    }
+
+                                    // Build member contribution leaderboard (sorted by contribution_xp)
+                                    if (guildContrib) {
+                                        const contribList = [...members].sort((a, b) => {
+                                            const ax = a.contribution_xp || 0;
+                                            const bx = b.contribution_xp || 0;
+                                            if (bx !== ax) return bx - ax;
+                                            return (a.username || '').localeCompare(b.username || '');
+                                        });
+                                        let rank = 1;
+                                        for (const m of contribList) {
+                                            const xp = m.contribution_xp || 0;
+                                            const li = document.createElement('li');
+                                            li.className = 'px-3 py-1 flex items-center justify-between';
+                                            const left = document.createElement('span');
+                                            left.textContent = `#${rank} ${m.username || 'User #' + m.user_id}`;
+                                            const right = document.createElement('span');
+                                            right.textContent = `${xp.toLocaleString()} XP`;
+                                            right.className = 'text-gray-700';
+                                            if (m.user_id === data.me_id) {
+                                                li.classList.add('bg-indigo-50');
+                                                right.classList.add('font-semibold');
+                                            }
+                                            li.appendChild(left);
+                                            li.appendChild(right);
+                                            guildContrib.appendChild(li);
+                                            rank++;
+                                        }
                                     }
 
                                     // Visibility toggle only for leader

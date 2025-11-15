@@ -303,6 +303,8 @@ class GuildController extends Controller
         }
 
         $updated = $levels->addXp($guild, $xp);
+        // Track member contribution XP on the guild member row
+        $member->increment('contribution_xp', $xp);
 
         return response()->json([
             'ok' => true,

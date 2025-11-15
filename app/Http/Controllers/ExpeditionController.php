@@ -155,6 +155,8 @@ class ExpeditionController extends Controller
                     $band = $ranges[$level] ?? [10, 25];
                     $gxp = random_int($band[0], $band[1]);
                     app(GuildLevelService::class)->addXp($gm->guild, $gxp);
+                    // Track member contribution
+                    $gm->increment('contribution_xp', $gxp);
                 }
                 $totalXp += $xpRoll; $claimed++;
                 // deplete food/water
@@ -479,6 +481,8 @@ class ExpeditionController extends Controller
                 $band = $ranges[$level] ?? [10, 25];
                 $gxp = random_int($band[0], $band[1]);
                 app(GuildLevelService::class)->addXp($gm->guild, $gxp);
+                // Track member contribution
+                $gm->increment('contribution_xp', $gxp);
             }
             // deplete food/water based on duration: 1% per hour rounded up
             $hours = max(1, (int) ceil(((int)$ue->duration_seconds)/3600));

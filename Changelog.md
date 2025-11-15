@@ -20,12 +20,13 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Expedition scaling config (`config/expeditions.php`) for XP/time per level+hour, variance, and item quantity bands by expedition level.
 - Admin page: dedicated Tokens tab where admins can grant time tokens (by color and quantity) directly to selected users.
 - Guild system: players can create guilds (requires level 1000 and 1 black time token), join/leave a single guild, and view member lists, with a new `/guilds` page and navigation link.
- - Guilds now support open/private modes. Private guilds use join requests that leaders can approve/deny from the My Guild tab; open guilds allow direct joins.
- - Guild roles: leaders can promote/demote members to officer; both leaders and officers can approve or deny guild join requests.
- - Guild levels: guild level progression is capped at level 1000, but lifetime `total_xp` can continue to increase beyond the cap.
- - Time Keeper: added a guild leaderboard that ranks guilds globally by total guild XP, visible on the Leaderboards tab.
- - Travel: each completed Travel step now adds a small random amount of guild XP (5–10) to the user's guild, if they are in one.
- - Expeditions: claiming completed expeditions now grants additional guild XP based on expedition level (higher levels grant significantly more XP).
+- Guilds now support open/private modes. Private guilds use join requests that leaders can approve/deny from the My Guild tab; open guilds allow direct joins.
+- Guild roles: leaders can promote/demote members to officer; both leaders and officers can approve or deny guild join requests.
+- Guild levels: guild level progression is capped at level 1000, but lifetime `total_xp` can continue to increase beyond the cap.
+- Time Keeper: added a guild leaderboard that ranks guilds globally by total guild XP, visible on the Leaderboards tab.
+- Travel: each completed Travel step now adds a small random amount of guild XP (5–10) to the user's guild, if they are in one.
+- Expeditions: claiming completed expeditions now grants additional guild XP based on expedition level (higher levels grant significantly more XP).
+- Guilds: added a per-guild member contribution leaderboard that tracks how much guild XP each member has contributed (via travel steps, expeditions, and token donations).
 ### Changed
 - Switched authentication to username-based login and registration (username + password only).
 - Simplified login/register Blade views to use `username` field; removed email inputs and links to password reset on login page.

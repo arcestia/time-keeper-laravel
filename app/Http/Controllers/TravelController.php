@@ -168,6 +168,8 @@ class TravelController extends Controller
         if ($gm && $gm->guild) {
             $gxp = random_int(5, 10);
             app(GuildLevelService::class)->addXp($gm->guild, $gxp);
+            // Track member contribution
+            $gm->increment('contribution_xp', $gxp);
         }
         return response()->json([
             'ok' => true,
