@@ -1,12 +1,12 @@
 <?php
 return [
-    'xp_per_level' => 12,
-    'xp_per_hour' => 6,
-    'xp_per_hour_base' => 12,
-    'xp_per_hour_per_level' => 1.5,
-    // User-level contribution to expedition XP
-    'xp_per_user_level' => 10,
-    'xp_per_hour_per_user_level' => 1.5,
+    'xp_per_level' => 10,
+    'xp_per_hour' => 5,
+    'xp_per_hour_base' => 10,
+    'xp_per_hour_per_level' => 1.2,
+    // User-level contribution to expedition XP (medium nerf)
+    'xp_per_user_level' => 5,
+    'xp_per_hour_per_user_level' => 0.8,
     'time_per_level' => 36,
     'time_per_hour' => 15,
     'variance_min' => 0.9,
@@ -14,10 +14,10 @@ return [
     // Reward multipliers considering expedition level and costs
     'level_multipliers' => [
         1 => 1.00,
-        2 => 1.15,
-        3 => 1.35,
-        4 => 1.60,
-        5 => 2.00,
+        2 => 1.10,
+        3 => 1.25,
+        4 => 1.45,
+        5 => 1.80,
     ],
     'cost_weight' => 0.00005,       // per second of cost
     'energy_weight' => 0.004,       // per percent energy cost
