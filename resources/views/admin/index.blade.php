@@ -13,6 +13,7 @@
                     
                     <x-admin-tab-stats />
                     <x-admin-tab-transfers />
+                    <x-admin-tab-tokens />
                     <x-admin-tab-jobs />
                     <x-admin-tab-store />
 
@@ -22,12 +23,14 @@
                             const tabs = {
                                 stats: document.getElementById('tab-stats'),
                                 transfers: document.getElementById('tab-transfers'),
+                                tokens: document.getElementById('tab-tokens'),
                                 jobs: document.getElementById('tab-jobs'),
                                 store: document.getElementById('tab-store'),
                             };
                             const btns = {
                                 stats: document.getElementById('tabbtn-stats'),
                                 transfers: document.getElementById('tabbtn-transfers'),
+                                tokens: document.getElementById('tabbtn-tokens'),
                                 jobs: document.getElementById('tabbtn-jobs'),
                                 store: document.getElementById('tabbtn-store'),
                             };
@@ -55,6 +58,7 @@
                             }
                             btns.stats.addEventListener('click', () => activate('stats'));
                             btns.transfers.addEventListener('click', () => activate('transfers'));
+                            btns.tokens.addEventListener('click', () => activate('tokens'));
                             btns.jobs.addEventListener('click', () => activate('jobs'));
                             btns.store.addEventListener('click', () => activate('store'));
                             activate('stats');
@@ -64,6 +68,7 @@
                                 return m ? decodeURIComponent(m[1]) : '';
                             }
                             const xsrf = readCookie('XSRF-TOKEN');
+                            // Stats tab elements
                             const q = document.getElementById('adm-q');
                             const searchBtn = document.getElementById('adm-search');
                             const results = document.getElementById('adm-results');
@@ -71,10 +76,19 @@
                             const userInfo = document.getElementById('adm-user');
                             const userHead = document.getElementById('adm-user-head');
                             const status = document.getElementById('adm-status');
+                            // Tokens tab elements
+                            const tokQ = document.getElementById('tok-q');
+                            const tokSearchBtn = document.getElementById('tok-search');
+                            const tokResults = document.getElementById('tok-results');
+                            const tokForm = document.getElementById('tok-form');
+                            const tokUserInfo = document.getElementById('tok-user');
+                            const tokUserHead = document.getElementById('tok-user-head');
+                            const tokStatus = document.getElementById('tok-token-status');
                             const fields = ['energy','food','water','leisure','health'];
                             const sliders = Object.fromEntries(fields.map(k => [k, document.getElementById(k)]));
                             const vals = Object.fromEntries(fields.map(k => [k, document.getElementById('v-'+k)]));
-                            let currentUserId = null;
+                            let currentUserId = null; // stats tab user
+                            let currentTokenUserId = null; // tokens tab user
                             let currentCap = 100;
 
                             function tierStarColor(t){ if (t>=20) return 'text-fuchsia-500'; if (t>=15) return 'text-sky-500'; if (t>=10) return 'text-amber-500'; if (t>=5) return 'text-slate-500'; if (t>=1) return 'text-orange-500'; return 'text-gray-300'; }
@@ -93,9 +107,10 @@
                             }));
 
                             async function doSearch() {
+                                if (!results) return;
                                 results.innerHTML = '';
                                 try {
-                                    const res = await fetch('/admin/users?q=' + encodeURIComponent(q.value || ''), { headers: { 'Accept': 'application/json' } });
+                                    const res = await fetch('/admin/users?q=' + encodeURIComponent((q?.value || '')), { headers: { 'Accept': 'application/json' } });
                                     if (!res.ok) throw new Error();
                                     const list = await res.json();
                                     if (list.length === 0) {
@@ -129,6 +144,43 @@
                                 }
                             }
 
+                            async function tokDoSearch() {
+                                if (!tokResults) return;
+                                tokResults.innerHTML = '';
+                                try {
+                                    const res = await fetch('/admin/users?q=' + encodeURIComponent((tokQ?.value || '')), { headers: { 'Accept': 'application/json' } });
+                                    if (!res.ok) throw new Error();
+                                    const list = await res.json();
+                                    if (list.length === 0) {
+                                        tokResults.innerHTML = '<li class="p-3 text-sm text-gray-500">No results</li>';
+                                        return;
+                                    }
+                                    const withPremium = await Promise.all(list.map(async (u) => {
+                                        try {
+                                            const r = await fetch('/admin/users/' + u.id + '/stats', { headers: { 'Accept': 'application/json' } });
+                                            if (!r.ok) throw new Error();
+                                            const d = await r.json();
+                                            const tier = (d && d.premium && d.premium.tier) || 0;
+                                            return { ...u, tier };
+                                        } catch (_) { return { ...u, tier: 0 }; }
+                                    }));
+                                    for (const u of withPremium) {
+                                        const li = document.createElement('li');
+                                        li.className = 'p-3 hover:bg-gray-50 cursor-pointer flex items-center gap-2';
+                                        const star = document.createElement('i');
+                                        star.className = 'fa-solid fa-star ' + tierStarColor(u.tier);
+                                        const label = document.createElement('span');
+                                        label.textContent = u.username;
+                                        li.appendChild(label);
+                                        li.appendChild(star);
+                                        li.addEventListener('click', () => tokLoadUser(u.id));
+                                        tokResults.appendChild(li);
+                                    }
+                                } catch (e) {
+                                    tokResults.innerHTML = '<li class="p-3 text-sm text-rose-600">Failed to load results</li>';
+                                }
+                            }
+
                             async function loadUser(id) {
                                 try {
                                     const res = await fetch('/admin/users/' + id + '/stats', { headers: { 'Accept': 'application/json' } });
@@ -145,6 +197,27 @@
                                     status.textContent = '';
                                 } catch (e) {
                                     status.textContent = 'Failed to load user stats';
+                                }
+                            }
+
+                            async function tokLoadUser(id) {
+                                try {
+                                    const res = await fetch('/admin/users/' + id + '/stats', { headers: { 'Accept': 'application/json' } });
+                                    if (!res.ok) throw new Error();
+                                    const data = await res.json();
+                                    currentTokenUserId = data.user.id;
+                                    if (tokUserInfo && tokForm) {
+                                        tokUserInfo.classList.add('hidden');
+                                        tokForm.classList.remove('hidden');
+                                    }
+                                    if (tokUserHead) {
+                                        const tier = (data.premium && data.premium.tier) || 0;
+                                        const starCls = tierStarColor(tier);
+                                        tokUserHead.innerHTML = `${data.user.username} <i class=\"fa-solid fa-star ${starCls}\"></i>`;
+                                    }
+                                    if (tokStatus) tokStatus.textContent = '';
+                                } catch (e) {
+                                    if (tokStatus) tokStatus.textContent = 'Failed to load user';
                                 }
                             }
 
@@ -174,8 +247,57 @@
                                 }
                             }
 
-                            searchBtn.addEventListener('click', doSearch);
-                            document.getElementById('adm-save').addEventListener('click', save);
+                            async function grantTokens() {
+                                if (!tokStatus) return;
+                                if (!currentTokenUserId) {
+                                    tokStatus.textContent = 'Select a user first';
+                                    return;
+                                }
+                                const colorEl = document.getElementById('tok-token-color');
+                                const qtyEl = document.getElementById('tok-token-qty');
+                                if (!colorEl || !qtyEl) {
+                                    tokStatus.textContent = 'Token controls not available';
+                                    return;
+                                }
+                                const color = (colorEl.value || '').toLowerCase();
+                                const qty = parseInt(qtyEl.value, 10) || 0;
+                                if (!color || qty <= 0) {
+                                    tokStatus.textContent = 'Choose a color and quantity > 0';
+                                    return;
+                                }
+                                tokStatus.textContent = 'Granting tokens...';
+                                try {
+                                    const res = await fetch(`/admin/users/${currentTokenUserId}/tokens`, {
+                                        method: 'POST',
+                                        headers: {
+                                            'Accept': 'application/json',
+                                            'Content-Type': 'application/json',
+                                            'X-CSRF-TOKEN': csrf,
+                                            'X-XSRF-TOKEN': xsrf,
+                                            'X-Requested-With': 'XMLHttpRequest',
+                                        },
+                                        credentials: 'same-origin',
+                                        body: JSON.stringify({ color, qty }),
+                                    });
+                                    const data = await res.json();
+                                    if (!res.ok || !data.ok) {
+                                        tokStatus.textContent = (data && data.message) ? data.message : 'Failed to grant tokens';
+                                        return;
+                                    }
+                                    tokStatus.textContent = `Granted ${data.granted_qty} ${data.color} token(s). New total: ${data.total_qty}`;
+                                } catch (e) {
+                                    tokStatus.textContent = 'Failed to grant tokens';
+                                }
+                            }
+
+                            if (searchBtn) searchBtn.addEventListener('click', doSearch);
+                            if (tokSearchBtn) tokSearchBtn.addEventListener('click', tokDoSearch);
+                            const admSaveBtn = document.getElementById('adm-save');
+                            if (admSaveBtn) admSaveBtn.addEventListener('click', save);
+                            const grantBtn = document.getElementById('tok-token-grant');
+                            if (grantBtn) {
+                                grantBtn.addEventListener('click', grantTokens);
+                            }
 
                             // Admin Store - moved after save() so it always registers
                             const astItems = document.getElementById('ast-items');

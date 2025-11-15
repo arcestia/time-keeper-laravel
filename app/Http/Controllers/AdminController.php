@@ -14,6 +14,7 @@ use Flasher\Laravel\Facade\Flasher;
 use App\Models\StoreBalance;
 use App\Models\TimeKeeperReserve;
 use App\Services\PremiumService;
+use App\Services\TimeTokenService;
 use App\Support\TimeUnits;
 
 class AdminController extends Controller
@@ -193,6 +194,35 @@ class AdminController extends Controller
                 'leisure' => (int)$stats->leisure,
                 'health' => (int)$stats->health,
             ],
+        ]);
+    }
+
+    public function grantUserTokens(Request $request, int $id, TimeTokenService $tokens): JsonResponse
+    {
+        $user = Auth::user();
+        abort_unless($user && $user->is_admin, 403);
+
+        $target = User::findOrFail($id);
+
+        $data = $request->validate([
+            'color' => ['required', 'string', 'in:red,blue,green,yellow,black'],
+            'qty' => ['required', 'integer', 'min:1', 'max:1000000'],
+        ]);
+
+        $color = strtolower($data['color']);
+        $qty = (int) $data['qty'];
+
+        $row = $tokens->credit($target->id, $color, $qty);
+
+        Flasher::addSuccess('Granted ' . $qty . ' ' . $color . ' token(s) to user ID ' . $target->id);
+        session()->flash('success', 'Granted ' . $qty . ' ' . $color . ' token(s) to user ID ' . $target->id);
+
+        return response()->json([
+            'ok' => true,
+            'user_id' => (int) $target->id,
+            'color' => $color,
+            'granted_qty' => (int) $qty,
+            'total_qty' => (int) $row->quantity,
         ]);
     }
 
