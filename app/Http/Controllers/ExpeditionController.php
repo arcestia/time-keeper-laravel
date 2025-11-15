@@ -90,15 +90,18 @@ class ExpeditionController extends Controller
         $user = Auth::user();
         $now = now();
         $claimed = 0; $totalXp = 0; $lootAgg = [];
-        // Process each finished active expedition in its own transaction to reduce lock contention
-        $toProcess = UserExpedition::where(['user_id'=>$user->id,'status'=>'active'])
-            ->whereNotNull('ends_at')
-            ->where('ends_at','<=',$now)
-            ->orderBy('id')
-            ->limit(100)
-            ->get();
-        foreach ($toProcess as $ueRow) {
-            DB::transaction(function() use($user,$ueRow,$now,&$claimed,&$totalXp,&$lootAgg) {
+        // Process all finished active expeditions in batches; each row handled in its own transaction
+        $batchSize = 500;
+        while (true) {
+            $toProcess = UserExpedition::where(['user_id'=>$user->id,'status'=>'active'])
+                ->whereNotNull('ends_at')
+                ->where('ends_at','<=',$now)
+                ->orderBy('id')
+                ->limit($batchSize)
+                ->get();
+            if ($toProcess->isEmpty()) { break; }
+            foreach ($toProcess as $ueRow) {
+                DB::transaction(function() use($user,$ueRow,$now,&$claimed,&$totalXp,&$lootAgg) {
                 $ue = UserExpedition::where(['id'=>$ueRow->id,'user_id'=>$user->id])->lockForUpdate()->first();
                 if (!$ue || $ue->status !== 'active' || !$ue->ends_at || $now->lt($ue->ends_at)) { return; }
                 $ue->status = 'completed';
@@ -210,7 +213,8 @@ class ExpeditionController extends Controller
                 $ue->loot = $loot; $ue->status = 'claimed'; $ue->save();
                 // daily stats: increment expeditions completed (UTC boundaries) for bulk claim
                 app(\App\Services\StatsService::class)->incExpCompleted($user->id);
-            });
+                });
+            }
         }
         return response()->json(['ok'=>true,'claimed'=>$claimed,'total_xp'=>$totalXp,'loot'=>array_values($lootAgg)]);
     }

@@ -55,6 +55,7 @@
                         </x-slot>
                         <x-slot name="content">
                             <x-dropdown-link :href="route('guilds.page')" :active="request()->routeIs('guilds.page')">{{ __('Guilds') }}</x-dropdown-link>
+                            <x-dropdown-link :href="route('trades.page')" :active="request()->routeIs('trades.page')">{{ __('Trades') }}</x-dropdown-link>
                         </x-slot>
                     </x-dropdown>
 
@@ -142,6 +143,7 @@
             <div class="px-3 pt-3 text-xs font-semibold uppercase text-gray-500">{{ __('Community') }}</div>
             <div class="pl-5 space-y-1">
                 <x-responsive-nav-link :href="route('guilds.page')" :active="request()->routeIs('guilds.page')">{{ __('Guilds') }}</x-responsive-nav-link>
+                <x-responsive-nav-link :href="route('trades.page')" :active="request()->routeIs('trades.page')">{{ __('Trades') }}</x-responsive-nav-link>
             </div>
 
             <div class="px-3 pt-3 text-xs font-semibold uppercase text-gray-500">{{ __('Premium') }}</div>

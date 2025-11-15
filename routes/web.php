@@ -9,6 +9,7 @@ use App\Http\Controllers\StoreController;
 use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\ExpeditionController;
 use App\Http\Controllers\TokenShopController;
+use App\Http\Controllers\TradeController;
 use App\Http\Controllers\GuildController;
 use Illuminate\Support\Facades\Route;
 
@@ -144,6 +145,21 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/api/guilds/members/{id}/role', [GuildController::class, 'updateMemberRole'])->name('guilds.members.role');
     Route::post('/api/guilds/{id}/lock', [GuildController::class, 'adminLock'])->name('guilds.admin.lock');
     Route::post('/api/guilds/{id}/unlock', [GuildController::class, 'adminUnlock'])->name('guilds.admin.unlock');
+
+    // Trades
+    Route::get('/trades', [TradeController::class, 'page'])->name('trades.page');
+    Route::get('/trades/{id}', [TradeController::class, 'pageShow'])->name('trades.page.show');
+    Route::get('/api/trades/my-items', [TradeController::class, 'myItems'])->name('trades.my_items');
+    Route::get('/api/trades/my-tokens', [TradeController::class, 'myTokens'])->name('trades.my_tokens');
+    Route::get('/api/trades', [TradeController::class, 'list'])->name('trades.list');
+    Route::get('/api/trades/{id}', [TradeController::class, 'show'])->name('trades.show');
+    Route::post('/api/trades/create', [TradeController::class, 'create'])->name('trades.create');
+    Route::post('/api/trades/{id}/lines/add', [TradeController::class, 'addLine'])->name('trades.lines.add');
+    Route::post('/api/trades/{id}/lines/remove', [TradeController::class, 'removeLine'])->name('trades.lines.remove');
+    Route::post('/api/trades/{id}/accept', [TradeController::class, 'accept'])->name('trades.accept');
+    Route::post('/api/trades/{id}/unaccept', [TradeController::class, 'unaccept'])->name('trades.unaccept');
+    Route::post('/api/trades/{id}/cancel', [TradeController::class, 'cancel'])->name('trades.cancel');
+    Route::post('/api/trades/{id}/finalize', [TradeController::class, 'finalize'])->name('trades.finalize');
 
     // Stats and Leaderboards
     Route::post('/api/stats/steps', [\App\Http\Controllers\StatsController::class, 'addSteps'])->name('stats.add_steps');

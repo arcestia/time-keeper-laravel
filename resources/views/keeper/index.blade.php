@@ -28,10 +28,17 @@
                                 <button class="px-3 py-1 text-sm lbp-btn" data-period="monthly">Monthly</button>
                             </div>
                             <div class="text-sm text-gray-600 ml-4">Metric:</div>
-                            <div class="inline-flex rounded overflow-hidden border">
-                                <button class="px-3 py-1 text-sm lbm-btn bg-indigo-50 text-indigo-700" data-metric="steps">Steps</button>
-                                <button class="px-3 py-1 text-sm lbm-btn" data-metric="exp_completed">Expeditions Completed</button>
-                                <button class="px-3 py-1 text-sm lbm-btn" data-metric="level">Level</button>
+                            <div class="flex flex-wrap gap-2">
+                                <div class="inline-flex rounded overflow-hidden border">
+                                    <button class="px-3 py-1 text-sm lbm-btn bg-indigo-50 text-indigo-700" data-metric="steps">Steps</button>
+                                    <button class="px-3 py-1 text-sm lbm-btn" data-metric="exp_completed">Expeditions Completed</button>
+                                    <button class="px-3 py-1 text-sm lbm-btn" data-metric="level">Level</button>
+                                </div>
+                                <div class="inline-flex rounded overflow-hidden border">
+                                    <button class="px-3 py-1 text-sm lbm-btn" data-metric="wallet">Wallet</button>
+                                    <button class="px-3 py-1 text-sm lbm-btn" data-metric="bank">Bank</button>
+                                    <button class="px-3 py-1 text-sm lbm-btn" data-metric="total_xp">Total XP</button>
+                                </div>
                             </div>
                         </div>
                         <div class="overflow-x-auto">

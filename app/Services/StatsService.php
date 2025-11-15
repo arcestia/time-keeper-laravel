@@ -72,6 +72,39 @@ class StatsService
             return $rows->map(function($r, $idx){ $r->rank = $idx + 1; return $r; });
         }
 
+        if ($metric === 'wallet') {
+            $rows = DB::table('user_time_wallets as w')
+                ->join('users as u', 'u.id', '=', 'w.user_id')
+                ->select('u.username', 'w.user_id', DB::raw('w.available_seconds as total'))
+                ->orderByDesc('total')
+                ->orderBy('u.username')
+                ->limit($limit)
+                ->get();
+            return $rows->map(function($r, $idx){ $r->rank = $idx + 1; return $r; });
+        }
+
+        if ($metric === 'bank') {
+            $rows = DB::table('time_accounts as a')
+                ->join('users as u', 'u.id', '=', 'a.user_id')
+                ->select('u.username', 'a.user_id', DB::raw('a.base_balance_seconds as total'))
+                ->orderByDesc('total')
+                ->orderBy('u.username')
+                ->limit($limit)
+                ->get();
+            return $rows->map(function($r, $idx){ $r->rank = $idx + 1; return $r; });
+        }
+
+        if ($metric === 'total_xp') {
+            $rows = DB::table('user_progress as up')
+                ->join('users as u', 'u.id', '=', 'up.user_id')
+                ->select('u.username', 'up.user_id', DB::raw('up.total_xp as total'))
+                ->orderByDesc('total')
+                ->orderBy('u.username')
+                ->limit($limit)
+                ->get();
+            return $rows->map(function($r, $idx){ $r->rank = $idx + 1; return $r; });
+        }
+
         [$startDate, $endDate] = $this->rangeFor($period, $refDate);
         $col = $metric === 'steps' ? 'steps_count' : 'expeditions_completed';
         $rows = DB::table('user_daily_stats as uds')

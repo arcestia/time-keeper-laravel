@@ -86,7 +86,7 @@ class StatsController extends Controller
     {
         $period = in_array($period, ['daily','weekly','monthly'], true) ? $period : 'daily';
         $metric = $request->query('metric','steps');
-        if (!in_array($metric, ['steps','exp_completed','level'], true)) { $metric = 'steps'; }
+        if (!in_array($metric, ['steps','exp_completed','level','wallet','bank','total_xp'], true)) { $metric = 'steps'; }
         // map metric to service column / key
         $metricKey = $metric;
         if ($metricKey === 'exp_completed') { $metricKey = 'expeditions_completed'; }
