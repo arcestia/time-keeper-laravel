@@ -19,6 +19,34 @@
                         </div>
                     </div>
 
+                    <!-- Change Passcode Modal -->
+                    <div id="pass-modal" class="fixed inset-0 bg-gray-900/40 flex items-center justify-center z-50 hidden">
+                        <div class="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+                            <div class="flex items-start justify-between mb-4">
+                                <h3 class="text-lg font-semibold text-gray-900">Change Bank Passcode</h3>
+                                <button type="button" id="pass-close" class="text-gray-400 hover:text-gray-600">&times;</button>
+                            </div>
+                            <div class="space-y-3">
+                                <p class="text-sm text-gray-600">Update your bank passcode. You must enter your current passcode to confirm this change.</p>
+                                <div class="space-y-2">
+                                    <div>
+                                        <label for="pass-current" class="block text-xs font-medium text-gray-600 mb-1">Current passcode</label>
+                                        <input id="pass-current" type="password" class="border rounded px-3 py-2 w-full" />
+                                    </div>
+                                    <div>
+                                        <label for="pass-new" class="block text-xs font-medium text-gray-600 mb-1">New passcode</label>
+                                        <input id="pass-new" type="password" class="border rounded px-3 py-2 w-full" />
+                                    </div>
+                                </div>
+                                <p class="text-xs text-gray-500">Passcode must be between 4 and 64 characters.</p>
+                            </div>
+                            <div class="mt-6 flex justify-end gap-2">
+                                <button type="button" id="pass-cancel" class="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Cancel</button>
+                                <button type="button" id="pass-save" class="px-4 py-2 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700">Save Passcode</button>
+                            </div>
+                        </div>
+                    </div>
+
                     <div id="passcode-login" class="hidden">
                         <div class="mb-2 text-gray-700">Enter your bank passcode to continue.</div>
                         <div class="flex gap-2 flex-wrap items-center">
@@ -80,7 +108,8 @@
                                 <div id="tok-result" class="text-xs text-gray-500 mt-1"></div>
                             </div>
 
-                            <div class="flex justify-end">
+                            <div class="flex justify-end gap-3 flex-wrap">
+                                <button id="change-pass-btn" class="text-sm text-indigo-600 hover:text-indigo-800">Change passcode</button>
                                 <button id="logout-btn" class="text-sm text-gray-600 hover:text-gray-800">Lock Bank</button>
                             </div>
                         </div>
@@ -197,6 +226,13 @@
                             const tokResult = document.getElementById('tok-result');
                             const tokBalancesEl = document.getElementById('tok-balances');
                             const logoutBtn = document.getElementById('logout-btn');
+                            const changePassBtn = document.getElementById('change-pass-btn');
+                            const passModal = document.getElementById('pass-modal');
+                            const passClose = document.getElementById('pass-close');
+                            const passCancel = document.getElementById('pass-cancel');
+                            const passCurrent = document.getElementById('pass-current');
+                            const passNew = document.getElementById('pass-new');
+                            const passSave = document.getElementById('pass-save');
 
                             let loggedIn = false;
                             let walletCurrent = 0;
@@ -547,6 +583,51 @@
                                     tokResult.textContent = `Exchanged ${data.exchanged_qty} ${color} token(s); credited ${data.credited_seconds}s`;
                                     await loadTokenBalances();
                                 } catch (e) { statusEl.textContent = e.message; }
+                            });
+
+                            if (changePassBtn) {
+                                changePassBtn.addEventListener('click', () => {
+                                    if (!loggedIn) {
+                                        statusEl.textContent = 'Login first';
+                                        showToast('Login to the bank before changing passcode', 'error');
+                                        return;
+                                    }
+                                    if (passCurrent) passCurrent.value = '';
+                                    if (passNew) passNew.value = '';
+                                    openModal(passModal);
+                                    statusEl.textContent = '';
+                                });
+                            }
+
+                            if (passClose) passClose.addEventListener('click', () => closeModal(passModal));
+                            if (passCancel) passCancel.addEventListener('click', () => closeModal(passModal));
+
+                            if (passSave) passSave.addEventListener('click', async () => {
+                                if (!loggedIn) {
+                                    statusEl.textContent = 'Login first';
+                                    showToast('Login to the bank before changing passcode', 'error');
+                                    return;
+                                }
+                                const currentVal = passCurrent ? passCurrent.value.trim() : '';
+                                const newVal = passNew ? passNew.value.trim() : '';
+                                if (!currentVal || !newVal) {
+                                    statusEl.textContent = 'Enter both current and new passcodes';
+                                    showToast('Enter both current and new passcodes', 'error');
+                                    return;
+                                }
+                                statusEl.textContent = 'Updating passcode...';
+                                try {
+                                    await postJSON('/bank/passcode/change', {
+                                        current_passcode: currentVal,
+                                        new_passcode: newVal,
+                                    });
+                                    statusEl.textContent = '';
+                                    closeModal(passModal);
+                                    showToast('Bank passcode updated', 'success');
+                                } catch (e) {
+                                    statusEl.textContent = e.message;
+                                    showToast(e.message, 'error');
+                                }
                             });
 
                             if (logoutBtn) logoutBtn.addEventListener('click', async () => {

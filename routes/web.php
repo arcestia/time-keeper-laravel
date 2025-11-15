@@ -29,6 +29,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/bank/data', [BankController::class, 'index'])->name('bank.index');
     Route::get('/bank/user-time', [BankController::class, 'userTime'])->name('bank.user_time');
     Route::post('/bank/passcode', [BankController::class, 'setPasscode'])->name('bank.passcode');
+    Route::post('/bank/passcode/change', [BankController::class, 'changePasscode'])->name('bank.passcode.change');
     Route::post('/bank/login', [BankController::class, 'login'])->name('bank.login');
     Route::post('/bank/lock', [BankController::class, 'lock'])->name('bank.lock');
     Route::post('/bank/deposit', [BankController::class, 'deposit'])->name('bank.deposit');

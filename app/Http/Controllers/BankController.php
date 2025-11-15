@@ -49,6 +49,33 @@ class BankController extends Controller
         return response()->json(['status' => 'ok']);
     }
 
+    public function changePasscode(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'current_passcode' => ['required', 'string'],
+            'new_passcode' => ['required', 'string', 'min:4', 'max:64'],
+        ]);
+
+        $user = Auth::user();
+        $account = TimeAccount::where('user_id', $user->id)->firstOrFail();
+        if (empty($account->passcode_hash)) {
+            return response()->json(['message' => 'Passcode not set'], 422);
+        }
+
+        if (!Hash::check($data['current_passcode'], $account->passcode_hash)) {
+            return response()->json(['message' => 'Current passcode is incorrect'], 403);
+        }
+
+        $account->passcode_hash = Hash::make($data['new_passcode']);
+        $account->passcode_set_at = now();
+        $account->save();
+
+        // Keep the existing bank session; user stays logged into the bank
+        $request->session()->put('bank_logged_in', true);
+
+        return response()->json(['status' => 'ok']);
+    }
+
     public function lock(Request $request): JsonResponse
     {
         $request->session()->forget('bank_logged_in');
