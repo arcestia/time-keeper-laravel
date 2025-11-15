@@ -25,6 +25,12 @@ class PremiumController extends Controller
     public function preview(): JsonResponse
     {
         $user = Auth::user();
+        // Block purchases for lifetime or Tier 20 users
+        $p = \App\Services\PremiumService::getOrCreate($user->id);
+        $currentTier = \App\Services\PremiumService::tierFor((int)$p->premium_seconds_accumulated);
+        if ($p->lifetime || $currentTier >= 20) {
+            return response()->json(['ok' => false, 'message' => 'Premium purchases are disabled for Lifetime or Tier 20 users'], 422);
+        }
         $amountStr = (string) request()->input('amount', '');
         $source = (string) request()->input('source', 'bank');
         $seconds = \App\Support\TimeUnits::parseToSeconds($amountStr) ?? 0;
@@ -106,6 +112,13 @@ class PremiumController extends Controller
     public function buy(): JsonResponse
     {
         $user = Auth::user();
+        // Block purchases for lifetime or Tier 20 users
+        $pExisting = \App\Services\PremiumService::getOrCreate($user->id);
+        $tierExisting = \App\Services\PremiumService::tierFor((int)$pExisting->premium_seconds_accumulated);
+        if ($pExisting->lifetime || $tierExisting >= 20) {
+            Flasher::addError('Premium purchases are disabled for Lifetime or Tier 20 users');
+            return response()->json(['ok' => false, 'message' => 'Premium purchases are disabled for Lifetime or Tier 20 users'], 422);
+        }
         $amountStr = (string) request()->input('amount', '');
         $source = (string) request()->input('source', 'bank'); // 'bank' or 'wallet'
         // Parse simple formats; reuse TimeUnits if available, else seconds integer

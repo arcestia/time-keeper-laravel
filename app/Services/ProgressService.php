@@ -12,7 +12,7 @@ class ProgressService
     public function nextXpForLevel(int $level): int
     {
         $level = max(1, $level);
-        return 1000 + ($level - 1) * 50; // linear progression
+        return 10000 + ($level - 1) * 50; // linear progression
     }
 
     public function getOrCreate(int $userId): UserProgress
@@ -52,6 +52,11 @@ class ProgressService
                     'next_xp' => $this->nextXpForLevel(1),
                 ]);
                 $p->save();
+            }
+            // Ensure next_xp matches the current progression formula
+            $expectedNext = $this->nextXpForLevel((int) ($p->level ?? 1));
+            if ((int) ($p->next_xp ?? 0) !== (int) $expectedNext) {
+                $p->next_xp = (int) $expectedNext;
             }
             $p->xp = (int) $p->xp + $amount;
             $p->total_xp = (int) ($p->total_xp ?? 0) + $amount;

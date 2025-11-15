@@ -127,7 +127,9 @@
                                 } else {
                                     activeUI.classList.remove('hidden');
                                     landing.classList.add('hidden');
-                                    buyCard.classList.remove('hidden');
+                                    // Hide Buy card for Lifetime or Tier 20 users
+                                    if (d.lifetime || (parseInt(d.tier||0,10) >= 20)) { buyCard.classList.add('hidden'); }
+                                    else { buyCard.classList.remove('hidden'); }
                                     healCard.classList.remove('hidden');
                                 }
 
@@ -182,6 +184,8 @@
                             // Buy button uses preview+confirm
                             document.getElementById('pm-buy').addEventListener('click', async () => {
                                 const status = document.getElementById('pm-buy-status');
+                                const tierNum = parseInt(document.getElementById('pm-tier')?.textContent||'0',10)||0;
+                                if (pmLifetime || tierNum>=20) { status.textContent = 'Purchases disabled for Lifetime or Tier 20 users'; return; }
                                 const amount = document.getElementById('pm-amount').value.trim();
                                 const source = getSource();
                                 status.textContent = 'Checking...';
@@ -224,6 +228,7 @@
                             // Landing: Join/Renew button → SweetAlert buy modal
                             const joinBtn = document.getElementById('pm-join-btn');
                             joinBtn.addEventListener('click', async () => {
+                                if (pmLifetime || (parseInt(document.getElementById('pm-tier')?.textContent||'0',10)||0) >= 20) { return; }
                                 let amount = '';
                                 let source = getSource();
                                 if (window.Swal) {

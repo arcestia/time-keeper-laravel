@@ -34,12 +34,14 @@ class TravelController extends Controller
         $level = max(1, (int) $progress->level);
 
         // Base ranges for potential rewards
-        $minXp = (int) floor($level * 10 * 0.9);
-        $maxXp = (int) ceil($level * 10 * 1.2);
+        // XP is based on user level × random between 1.0 and 2.2
+        $minXp = (int) floor($level * 1.0);
+        $maxXp = (int) ceil($level * 2.2);
         $baseXp = random_int(max(1, $minXp), max($minXp + 1, $maxXp));
 
-        $minTime = (int) floor($level * 30 * 0.9);
-        $maxTime = (int) ceil($level * 30 * 1.2);
+        // Time seconds reward scales with user level × random between 4 and 7 seconds
+        $minTime = (int) floor($level * 4);
+        $maxTime = (int) ceil($level * 7);
         $baseTimeSec = random_int(max(1, $minTime), max($minTime + 1, $maxTime));
 
         if ($isPrem) {
