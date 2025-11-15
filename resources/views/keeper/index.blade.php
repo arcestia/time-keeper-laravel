@@ -19,7 +19,7 @@
                         </nav>
                     </div>
 
-                    <div id="tab-boards" class="mt-8 hidden">
+                    <div id="tab-boards" class="mt-8 hidden space-y-6">
                         <div class="flex items-center gap-3 mb-3">
                             <div class="text-sm text-gray-600">Period:</div>
                             <div class="inline-flex rounded overflow-hidden border">
@@ -47,6 +47,27 @@
                             </table>
                         </div>
                         <div id="lb-status" class="text-sm text-gray-500 mt-2"></div>
+
+                        <div class="mt-8">
+                            <div class="flex items-center justify-between mb-2">
+                                <div class="text-sm font-semibold text-gray-700">Guild Leaderboard (by Total XP)</div>
+                            </div>
+                            <div class="overflow-x-auto">
+                                <table class="min-w-full text-sm">
+                                    <thead>
+                                        <tr class="text-left text-gray-600 border-b">
+                                            <th class="py-2 pr-4">Rank</th>
+                                            <th class="py-2 pr-4">Guild</th>
+                                            <th class="py-2 pr-4">Level</th>
+                                            <th class="py-2 pr-4">Members</th>
+                                            <th class="py-2">Total XP</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="guild-lb-body"></tbody>
+                                </table>
+                            </div>
+                            <div id="guild-lb-status" class="text-sm text-gray-500 mt-2"></div>
+                        </div>
                     </div>
 
                     <div id="tab-summary" class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -294,6 +315,8 @@
             let lbMetric = 'steps';
             const lbBody = document.getElementById('lb-body');
             const lbStatus = document.getElementById('lb-status');
+            const guildLbBody = document.getElementById('guild-lb-body');
+            const guildLbStatus = document.getElementById('guild-lb-status');
             function bindLbControls(){
                 document.querySelectorAll('.lbp-btn').forEach(btn => {
                     btn.addEventListener('click', () => {
@@ -327,6 +350,32 @@
                     }
                     lbStatus.textContent = rows.length === 0 ? 'No data' : '';
                 }catch(e){ lbStatus.textContent='Unable to load leaderboard'; }
+
+                // Guild leaderboard (global, no period)
+                if (guildLbBody) {
+                    guildLbBody.innerHTML = '';
+                    if (guildLbStatus) guildLbStatus.textContent = 'Loading guilds...';
+                    try {
+                        const r2 = await fetch('/api/guilds/leaderboard', { headers: { 'Accept': 'application/json' } });
+                        if (!r2.ok) throw new Error('failed');
+                        const js2 = await r2.json();
+                        const rows2 = js2 && js2.guilds ? js2.guilds : [];
+                        for (const g of rows2) {
+                            const tr = document.createElement('tr');
+                            tr.innerHTML = `
+                                <td class="py-2 pr-4">${g.rank}</td>
+                                <td class="py-2 pr-4">${g.name || ('Guild #'+g.id)}</td>
+                                <td class="py-2 pr-4">${g.level}</td>
+                                <td class="py-2 pr-4">${g.members}</td>
+                                <td class="py-2 font-mono">${(g.total_xp||0).toLocaleString()}</td>
+                            `;
+                            guildLbBody.appendChild(tr);
+                        }
+                        if (guildLbStatus) guildLbStatus.textContent = rows2.length === 0 ? 'No guilds yet' : '';
+                    } catch (e) {
+                        if (guildLbStatus) guildLbStatus.textContent = 'Unable to load guild leaderboard';
+                    }
+                }
             }
             bindLbControls();
 

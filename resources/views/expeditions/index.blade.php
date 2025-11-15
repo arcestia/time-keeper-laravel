@@ -360,6 +360,16 @@
                 const max = Math.min(EXP_CFG.qty_max||16, (band[1]||2) + Math.floor(h * perHour));
                 return [min, Math.max(min, max)];
             }
+            function estGuildXp(level){
+                const ranges = {
+                    1: [10, 25],
+                    2: [30, 60],
+                    3: [80, 200],
+                    4: [200, 450],
+                    5: [400, 800],
+                };
+                return ranges[level] || ranges[1];
+            }
             function updateProgress(el){
                 const start = parseInt(el.getAttribute('data-start')||'0',10)||0;
                 const end = parseInt(el.getAttribute('data-end')||'0',10)||0;
@@ -388,7 +398,8 @@
                     const tMaxMax = estTime(currentLevel, e.max_duration_seconds, e.cost_seconds, e.energy_cost_pct);
                     const qMin = estItemQty(currentLevel, e.min_duration_seconds);
                     const qMax = estItemQty(currentLevel, e.max_duration_seconds);
-                    levelMeta.textContent = `Level ${currentLevel} • Duration: ${fmtHMS(e.min_duration_seconds)} - ${fmtHMS(e.max_duration_seconds)} • Cost: ${fmtHMS(e.cost_seconds)} • Energy: -${e.energy_cost_pct}% • Est. XP: ${xpMinMax[0]}–${xpMaxMax[1]} • Est. Time: ${tMinMax[0]}–${tMaxMax[1]} sec • Est. item qty per drop: ${qMin[0]}–${qMax[1]}`;
+                    const gXp = estGuildXp(currentLevel);
+                    levelMeta.textContent = `Level ${currentLevel} • Duration: ${fmtHMS(e.min_duration_seconds)} - ${fmtHMS(e.max_duration_seconds)} • Cost: ${fmtHMS(e.cost_seconds)} • Energy: -${e.energy_cost_pct}% • Est. XP: ${xpMinMax[0]}–${xpMaxMax[1]} • Est. Time: ${tMinMax[0]}–${tMaxMax[1]} sec • Est. item qty per drop: ${qMin[0]}–${qMax[1]} • Est. guild XP per expedition: ${gXp[0]}–${gXp[1]}`;
                 }catch(e){ catStatus.textContent='Unable to load expeditions'; }
             }
 
@@ -444,6 +455,10 @@
                 badges.appendChild(lblTm);
                 const tmMM = estTime(lvl, r.duration_seconds||0, r.expedition?.cost_seconds||0, r.expedition?.energy_cost_pct||0);
                 badges.appendChild(badge(`${tmMM[0]}–${tmMM[1]}s`,'bg-amber-100','text-amber-700'));
+                badges.appendChild(dot.cloneNode(true));
+                const gXp = estGuildXp(lvl);
+                badges.appendChild(document.createTextNode('Guild XP'));
+                badges.appendChild(badge(`${gXp[0]}–${gXp[1]}`,'bg-purple-100','text-purple-700'));
                 return badges;
             }
 

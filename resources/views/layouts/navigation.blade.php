@@ -42,6 +42,9 @@
                     <x-nav-link :href="route('expeditions.page')" :active="request()->routeIs('expeditions.page')">
                         {{ __('Expeditions') }}
                     </x-nav-link>
+                    <x-nav-link :href="route('guilds.page')" :active="request()->routeIs('guilds.page')">
+                        {{ __('Guilds') }}
+                    </x-nav-link>
                     @if(Auth::user() && Auth::user()->is_admin)
                     <x-nav-link :href="route('admin.page')" :active="request()->routeIs('admin.page')">
                         {{ __('Admin') }}
@@ -128,6 +131,9 @@
             </x-responsive-nav-link>
             <x-responsive-nav-link :href="route('expeditions.page')" :active="request()->routeIs('expeditions.page')">
                 {{ __('Expeditions') }}
+            </x-responsive-nav-link>
+            <x-responsive-nav-link :href="route('guilds.page')" :active="request()->routeIs('guilds.page')">
+                {{ __('Guilds') }}
             </x-responsive-nav-link>
             @if(Auth::user() && Auth::user()->is_admin)
             <x-responsive-nav-link :href="route('admin.page')" :active="request()->routeIs('admin.page')">

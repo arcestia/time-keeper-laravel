@@ -14,6 +14,7 @@
                     <x-admin-tab-stats />
                     <x-admin-tab-transfers />
                     <x-admin-tab-tokens />
+                    <x-admin-tab-guilds />
                     <x-admin-tab-jobs />
                     <x-admin-tab-store />
 
@@ -24,6 +25,7 @@
                                 stats: document.getElementById('tab-stats'),
                                 transfers: document.getElementById('tab-transfers'),
                                 tokens: document.getElementById('tab-tokens'),
+                                guilds: document.getElementById('tab-guilds'),
                                 jobs: document.getElementById('tab-jobs'),
                                 store: document.getElementById('tab-store'),
                             };
@@ -31,6 +33,7 @@
                                 stats: document.getElementById('tabbtn-stats'),
                                 transfers: document.getElementById('tabbtn-transfers'),
                                 tokens: document.getElementById('tabbtn-tokens'),
+                                guilds: document.getElementById('tabbtn-guilds'),
                                 jobs: document.getElementById('tabbtn-jobs'),
                                 store: document.getElementById('tabbtn-store'),
                             };
@@ -52,6 +55,8 @@
                                     if (typeof loadAdminStore === 'function') { loadAdminStore(); }
                                     if (typeof loadStoreBalance === 'function') { loadStoreBalance(); }
                                     if (!sbTimer && typeof loadStoreBalance === 'function') { sbTimer = setInterval(loadStoreBalance, 10000); }
+                                } else if (name === 'guilds') {
+                                    if (typeof loadAdminGuilds === 'function') { loadAdminGuilds(); }
                                 } else {
                                     if (sbTimer) { clearInterval(sbTimer); sbTimer = null; }
                                 }
@@ -59,6 +64,7 @@
                             btns.stats.addEventListener('click', () => activate('stats'));
                             btns.transfers.addEventListener('click', () => activate('transfers'));
                             btns.tokens.addEventListener('click', () => activate('tokens'));
+                            btns.guilds.addEventListener('click', () => activate('guilds'));
                             btns.jobs.addEventListener('click', () => activate('jobs'));
                             btns.store.addEventListener('click', () => activate('store'));
                             activate('stats');
@@ -609,6 +615,84 @@
                             }
 
                             const trStatus = document.getElementById('tr-status');
+
+                            // Admin Guilds
+                            const agList = document.getElementById('ag-list');
+                            const agStatus = document.getElementById('ag-status');
+                            const agRefresh = document.getElementById('ag-refresh');
+
+                            async function loadAdminGuilds(){
+                                if (!agList) return;
+                                agStatus.textContent = 'Loading guilds...';
+                                agList.innerHTML = '';
+                                try {
+                                    const res = await fetch('/api/guilds', { headers: { 'Accept': 'application/json' } });
+                                    const data = await res.json();
+                                    if (!res.ok || !data.ok) throw new Error(data.message || 'Failed');
+                                    const list = Array.isArray(data.guilds) ? data.guilds : [];
+                                    if (list.length === 0){
+                                        agList.innerHTML = '<tr><td colspan="5" class="py-2 text-sm text-gray-500">No guilds found</td></tr>';
+                                        agStatus.textContent = '';
+                                        return;
+                                    }
+                                    for (const g of list){
+                                        const tr = document.createElement('tr');
+                                        tr.className = 'hover:bg-gray-50';
+                                        tr.innerHTML = `
+                                            <td class="py-1 pr-3 align-top">
+                                                <div class="font-medium text-gray-800">${(g.name||'').replace(/</g,'&lt;')}</div>
+                                                <div class="text-xs text-gray-500">${(g.description||'').replace(/</g,'&lt;')}</div>
+                                            </td>
+                                            <td class="py-1 pr-3 align-top text-xs text-gray-600">${g.owner_user_id || '-'}</td>
+                                            <td class="py-1 pr-3 align-top text-xs text-gray-600">${g.members} / 50</td>
+                                            <td class="py-1 pr-3 align-top text-xs">
+                                                ${g.is_locked ? '<span class="px-2 py-0.5 rounded-full bg-rose-100 text-rose-700">Locked</span>' : '<span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">Open</span>'}
+                                            </td>
+                                            <td class="py-1 align-top">
+                                                <button data-id="${g.id}" data-locked="${g.is_locked?1:0}" class="ag-toggle px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs rounded"></button>
+                                            </td>
+                                        `;
+                                        agList.appendChild(tr);
+                                    }
+                                    document.querySelectorAll('.ag-toggle').forEach(btn => {
+                                        const id = parseInt(btn.getAttribute('data-id'),10)||0;
+                                        const locked = btn.getAttribute('data-locked') === '1';
+                                        btn.textContent = locked ? 'Unlock' : 'Lock';
+                                        btn.classList.toggle('bg-indigo-600', !locked);
+                                        btn.classList.toggle('bg-rose-600', locked);
+                                        btn.addEventListener('click', async () => {
+                                            if (!id) return;
+                                            agStatus.textContent = locked ? 'Unlocking guild...' : 'Locking guild...';
+                                            try {
+                                                const url = `/api/guilds/${id}/` + (locked ? 'unlock' : 'lock');
+                                                const r = await fetch(url, {
+                                                    method: 'POST',
+                                                    headers: {
+                                                        'Accept': 'application/json',
+                                                        'Content-Type': 'application/json',
+                                                        'X-CSRF-TOKEN': csrf,
+                                                        'X-XSRF-TOKEN': xsrf,
+                                                        'X-Requested-With': 'XMLHttpRequest',
+                                                    },
+                                                    credentials: 'same-origin',
+                                                    body: JSON.stringify({}),
+                                                });
+                                                const d = await r.json();
+                                                if (!r.ok || !d.ok) throw new Error(d.message || 'Failed');
+                                                agStatus.textContent = locked ? 'Guild unlocked' : 'Guild locked';
+                                                await loadAdminGuilds();
+                                            } catch (e) {
+                                                agStatus.textContent = e.message || 'Failed to update guild';
+                                            }
+                                        });
+                                    });
+                                    agStatus.textContent = '';
+                                } catch (e) {
+                                    agStatus.textContent = 'Failed to load guilds';
+                                }
+                            }
+
+                            if (agRefresh) agRefresh.addEventListener('click', loadAdminGuilds);
                             document.getElementById('tr-dep-btn').addEventListener('click', async () => {
                                 const username = document.getElementById('tr-dep-username').value.trim();
                                 const amount = document.getElementById('tr-dep-amount').value.trim();

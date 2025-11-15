@@ -9,6 +9,7 @@ use App\Http\Controllers\StoreController;
 use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\ExpeditionController;
 use App\Http\Controllers\TokenShopController;
+use App\Http\Controllers\GuildController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -19,7 +20,7 @@ Route::get('/dashboard', function () {
     return view('dashboard');
 })->middleware(['auth'])->name('dashboard');
 
-Route::middleware('auth')->group(function () {
+Route::middleware(['auth'])->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
@@ -124,6 +125,24 @@ Route::middleware('auth')->group(function () {
     Route::post('/keeper/admin/deposit', [TimeKeeperController::class, 'adminDepositFromUserToReserve'])->name('keeper.admin.deposit');
     Route::post('/keeper/admin/withdraw', [TimeKeeperController::class, 'adminWithdrawFromReserveToUser'])->name('keeper.admin.withdraw');
     Route::post('/keeper/admin/distribute', [TimeKeeperController::class, 'adminDistributeReserveToAll'])->name('keeper.admin.distribute');
+    Route::post('/admin/guilds/xp', [GuildController::class, 'adminGrantXp'])->name('admin.guilds.grant_xp');
+
+    // Guilds
+    Route::get('/guilds', [GuildController::class, 'page'])->name('guilds.page');
+    Route::get('/api/guilds/me', [GuildController::class, 'me'])->name('guilds.me');
+    Route::get('/api/guilds', [GuildController::class, 'list'])->name('guilds.list');
+    Route::get('/api/guilds/leaderboard', [GuildController::class, 'leaderboard'])->name('guilds.leaderboard');
+    Route::post('/api/guilds/create', [GuildController::class, 'create'])->name('guilds.create');
+    Route::post('/api/guilds/join', [GuildController::class, 'join'])->name('guilds.join');
+    Route::post('/api/guilds/leave', [GuildController::class, 'leave'])->name('guilds.leave');
+    Route::post('/api/guilds/disband', [GuildController::class, 'disband'])->name('guilds.disband');
+    Route::post('/api/guilds/visibility', [GuildController::class, 'updateVisibility'])->name('guilds.visibility');
+    Route::post('/api/guilds/donate-tokens', [GuildController::class, 'donateTokens'])->name('guilds.donate_tokens');
+    Route::post('/api/guilds/requests/{id}/approve', [GuildController::class, 'approveRequest'])->name('guilds.requests.approve');
+    Route::post('/api/guilds/requests/{id}/deny', [GuildController::class, 'denyRequest'])->name('guilds.requests.deny');
+    Route::post('/api/guilds/members/{id}/role', [GuildController::class, 'updateMemberRole'])->name('guilds.members.role');
+    Route::post('/api/guilds/{id}/lock', [GuildController::class, 'adminLock'])->name('guilds.admin.lock');
+    Route::post('/api/guilds/{id}/unlock', [GuildController::class, 'adminUnlock'])->name('guilds.admin.unlock');
 
     // Stats and Leaderboards
     Route::post('/api/stats/steps', [\App\Http\Controllers\StatsController::class, 'addSteps'])->name('stats.add_steps');

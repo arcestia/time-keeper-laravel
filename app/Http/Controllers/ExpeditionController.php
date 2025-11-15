@@ -14,9 +14,11 @@ use App\Models\UserTimeWallet;
 use App\Models\TimeAccount;
 use App\Models\StoreItem;
 use App\Models\UserStorageItem;
+use App\Models\GuildMember;
 use App\Services\PremiumService;
 use App\Services\ProgressService;
 use App\Services\ExpeditionMasteryService;
+use App\Services\GuildLevelService;
 use Flasher\Laravel\Facade\Flasher;
 
 class ExpeditionController extends Controller
@@ -140,6 +142,20 @@ class ExpeditionController extends Controller
                 if ($mXpMult > 1.0) { $xpRoll = max(1, (int) floor($xpRoll * $mXpMult)); }
                 app(ExpeditionMasteryService::class)->addXp($user->id, (int)$xpRaw);
                 app(ProgressService::class)->addXp($user->id, $xpRoll);
+                // Guild XP: award based on expedition level when claimed
+                $gm = GuildMember::where('user_id', $user->id)->first();
+                if ($gm && $gm->guild) {
+                    $ranges = [
+                        1 => [10, 25],
+                        2 => [30, 60],
+                        3 => [80, 200],
+                        4 => [200, 450],
+                        5 => [400, 800],
+                    ];
+                    $band = $ranges[$level] ?? [10, 25];
+                    $gxp = random_int($band[0], $band[1]);
+                    app(GuildLevelService::class)->addXp($gm->guild, $gxp);
+                }
                 $totalXp += $xpRoll; $claimed++;
                 // deplete food/water
                 $deplete = min(100, $hours);
@@ -450,6 +466,20 @@ class ExpeditionController extends Controller
             if ($mXpMult > 1.0) { $xp = max(1, (int) floor($xp * $mXpMult)); }
             app(ExpeditionMasteryService::class)->addXp($user->id, (int)$xpRaw);
             app(ProgressService::class)->addXp($user->id, $xp);
+            // Guild XP: award based on expedition level when claimed
+            $gm = GuildMember::where('user_id', $user->id)->first();
+            if ($gm && $gm->guild) {
+                $ranges = [
+                    1 => [10, 25],
+                    2 => [30, 60],
+                    3 => [80, 200],
+                    4 => [200, 450],
+                    5 => [400, 800],
+                ];
+                $band = $ranges[$level] ?? [10, 25];
+                $gxp = random_int($band[0], $band[1]);
+                app(GuildLevelService::class)->addXp($gm->guild, $gxp);
+            }
             // deplete food/water based on duration: 1% per hour rounded up
             $hours = max(1, (int) ceil(((int)$ue->duration_seconds)/3600));
             $deplete = min(100, $hours);

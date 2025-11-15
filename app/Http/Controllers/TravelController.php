@@ -8,9 +8,11 @@ use Illuminate\Http\JsonResponse;
 use App\Models\UserTimeWallet;
 use App\Models\UserInventoryItem;
 use App\Models\StoreItem;
+use App\Models\GuildMember;
 use App\Services\PremiumService;
 use App\Services\ProgressService;
 use App\Services\TimeTokenService;
+use App\Services\GuildLevelService;
 use Carbon\CarbonImmutable;
 
 class TravelController extends Controller
@@ -160,6 +162,13 @@ class TravelController extends Controller
         [$p, $wallet, $grantedItem] = $result;
         // count 1 step for this travel action (UTC daily)
         app(\App\Services\StatsService::class)->addSteps($user->id, 1);
+
+        // Guild XP contribution: each travel step gives the user's guild a random 5-10 XP
+        $gm = GuildMember::where('user_id', $user->id)->first();
+        if ($gm && $gm->guild) {
+            $gxp = random_int(5, 10);
+            app(GuildLevelService::class)->addXp($gm->guild, $gxp);
+        }
         return response()->json([
             'ok' => true,
             'delay_seconds' => (int)$delay,
