@@ -49,6 +49,10 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Expeditions: Increased passive XP strength at higher levels (xp_per_hour_base 10→12, xp_per_hour_per_level 1.2→1.5).
 - Expeditions: View estimates now auto-apply premium multipliers when active (XP and Time).
 - Expeditions: Added user-level XP scaling (config keys `xp_per_user_level`, `xp_per_hour_per_user_level`) so expeditions reward better than Travel considering cost (wallet, energy, food/water).
+- Travel: the XP reward shown per step now reflects any active XP boost purchased from the token shop (matching the boosted XP actually applied via `ProgressService::addXp`).
+ - Bank: fixed withdraw logic so users cannot withdraw more than their bank balance, and the time wallet is only credited with the correctly debited amount.
+ - Bank UI: deposit, withdraw, and transfer actions now use confirmation modals and show toast-style notifications for success and errors.
+ - Bank: added support for a "withdraw all" option that safely moves the entire bank balance back into the wallet from the withdraw modal.
 ### Database
 - Added migration to add unique `username` column to `users` table and make `email` nullable.
 - Note: Existing users will need a `username` value to log in.

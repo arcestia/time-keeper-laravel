@@ -281,21 +281,42 @@ class BankController extends Controller
         }
 
         $wallet = UserTimeWallet::where('user_id', $user->id)->lockForUpdate()->firstOrFail();
-        try {
-            $amount = TimeUnits::parseToSeconds($data['amount']);
-        } catch (InvalidArgumentException $e) {
-            return response()->json(['message' => 'Invalid amount: '.$e->getMessage()], 422);
+
+        $rawAmount = trim($data['amount'] ?? '');
+        $withdrawAll = strcasecmp($rawAmount, 'all') === 0;
+        if (!$withdrawAll) {
+            try {
+                $amount = TimeUnits::parseToSeconds($rawAmount);
+            } catch (InvalidArgumentException $e) {
+                return response()->json(['message' => 'Invalid amount: '.$e->getMessage()], 422);
+            }
+        } else {
+            // Placeholder; actual amount for 'all' will be resolved inside the transaction
+            $amount = 0;
         }
         $reason = $data['reason'] ?? 'withdraw';
 
-        $seconds = DB::transaction(function () use ($wallet, $account, $amount, $reason) {
-            $this->bank->withdraw($account->refresh(), $amount, $reason);
+        $seconds = DB::transaction(function () use ($wallet, $account, $amount, $reason, $withdrawAll) {
+            // Check current bank balance before withdrawing
+            $currentBalance = $this->bank->getDisplayBalance($account->refresh());
+
+            $toWithdraw = $withdrawAll ? $currentBalance : $amount;
+            if ($toWithdraw <= 0) {
+                abort(422, 'Insufficient bank balance');
+            }
+            if ($toWithdraw > $currentBalance) {
+                abort(422, 'Insufficient bank balance');
+            }
+
+            // Perform the withdraw
+            $this->bank->withdraw($account->refresh(), $toWithdraw, $reason);
             $account->refresh();
-            $available = $this->bank->getDisplayBalance($account);
-            $debited = min($amount, $available + $amount); // actual debited is what left the account
-            $wallet->available_seconds = (int) $wallet->available_seconds + $debited;
+
+            // Credit the wallet with exactly what was debited
+            $wallet->available_seconds = (int) $wallet->available_seconds + $toWithdraw;
             $wallet->save();
-            return $this->bank->getDisplayBalance($account->refresh());
+
+            return $this->bank->getDisplayBalance($account);
         });
 
         $walletFresh = $wallet->fresh();

@@ -9,6 +9,7 @@ use App\Models\UserTimeWallet;
 use App\Models\UserInventoryItem;
 use App\Models\StoreItem;
 use App\Models\GuildMember;
+use App\Models\UserXpBoost;
 use App\Services\PremiumService;
 use App\Services\ProgressService;
 use App\Services\TimeTokenService;
@@ -171,12 +172,28 @@ class TravelController extends Controller
             // Track member contribution
             $gm->increment('contribution_xp', $gxp);
         }
+
+        // Apply token shop XP boost only to the *awarded* XP value shown to the user.
+        $awardedXp = (int) $xp;
+        if ($rewardType === 'xp' && $xp > 0) {
+            $nowBoost = now();
+            $totalBonus = (float) UserXpBoost::query()
+                ->where('user_id', $user->id)
+                ->whereNotNull('expires_at')
+                ->where('expires_at', '>', $nowBoost)
+                ->sum('bonus_percent');
+            $mult = 1.0 + max(0.0, $totalBonus);
+            if ($mult <= 0.0) {
+                $mult = 1.0;
+            }
+            $awardedXp = max(1, (int) floor($xp * $mult));
+        }
         return response()->json([
             'ok' => true,
             'delay_seconds' => (int)$delay,
             'awarded' => [
                 'type' => $rewardType,
-                'xp' => (int) $xp,
+                'xp' => (int) $awardedXp,
                 'time_seconds' => (int) $timeSec,
                 'item' => $grantedItem,
                 'token' => $token,
