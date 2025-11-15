@@ -11,44 +11,61 @@
                 </div>
 
                 <!-- Navigation Links -->
-                <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
+                <div class="hidden space-x-6 sm:-my-px sm:ms-10 sm:flex items-center">
                     <x-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">
                         {{ __('Dashboard') }}
                     </x-nav-link>
-                    <x-nav-link :href="route('bank.page')" :active="request()->routeIs('bank.page')">
-                        {{ __('Bank') }}
-                    </x-nav-link>
-                    <x-nav-link :href="route('keeper.page')" :active="request()->routeIs('keeper.page')">
-                        {{ __('Time Keeper') }}
-                    </x-nav-link>
-                    <x-nav-link :href="route('store.page')" :active="request()->routeIs('store.page')">
-                        {{ __('Store') }}
-                    </x-nav-link>
-                    <x-nav-link :href="route('token_shop.page')" :active="request()->routeIs('token_shop.page')">
-                        {{ __('Token Shop') }}
-                    </x-nav-link>
-                    <x-nav-link :href="route('travel.page')" :active="request()->routeIs('travel.page')">
-                        {{ __('Travel') }}
-                    </x-nav-link>
-                    <x-nav-link :href="route('inventory.page')" :active="request()->routeIs('inventory.page')">
-                        {{ __('Inventory') }}
-                    </x-nav-link>
+
+                    <x-dropdown align="left" width="56">
+                        <x-slot name="trigger">
+                            <button class="inline-flex items-center px-3 py-2 text-sm font-medium rounded-md text-gray-700 hover:text-gray-900 focus:outline-none">
+                                <span>{{ __('Gameplay') }}</span>
+                                <svg class="ms-1 h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+                            </button>
+                        </x-slot>
+                        <x-slot name="content">
+                            <x-dropdown-link :href="route('travel.page')" :active="request()->routeIs('travel.page')">{{ __('Travel') }}</x-dropdown-link>
+                            <x-dropdown-link :href="route('expeditions.page')" :active="request()->routeIs('expeditions.page')">{{ __('Expeditions') }}</x-dropdown-link>
+                            <x-dropdown-link :href="route('jobs.page')" :active="request()->routeIs('jobs.page')">{{ __('Jobs') }}</x-dropdown-link>
+                            <x-dropdown-link :href="route('inventory.page')" :active="request()->routeIs('inventory.page')">{{ __('Inventory') }}</x-dropdown-link>
+                        </x-slot>
+                    </x-dropdown>
+
+                    <x-dropdown align="left" width="56">
+                        <x-slot name="trigger">
+                            <button class="inline-flex items-center px-3 py-2 text-sm font-medium rounded-md text-gray-700 hover:text-gray-900 focus:outline-none">
+                                <span>{{ __('Economy') }}</span>
+                                <svg class="ms-1 h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+                            </button>
+                        </x-slot>
+                        <x-slot name="content">
+                            <x-dropdown-link :href="route('bank.page')" :active="request()->routeIs('bank.page')">{{ __('Bank') }}</x-dropdown-link>
+                            <x-dropdown-link :href="route('keeper.page')" :active="request()->routeIs('keeper.page')">{{ __('Time Keeper') }}</x-dropdown-link>
+                            <x-dropdown-link :href="route('store.page')" :active="request()->routeIs('store.page')">{{ __('Store') }}</x-dropdown-link>
+                            <x-dropdown-link :href="route('token_shop.page')" :active="request()->routeIs('token_shop.page')">{{ __('Token Shop') }}</x-dropdown-link>
+                        </x-slot>
+                    </x-dropdown>
+
+                    <x-dropdown align="left" width="48">
+                        <x-slot name="trigger">
+                            <button class="inline-flex items-center px-3 py-2 text-sm font-medium rounded-md text-gray-700 hover:text-gray-900 focus:outline-none">
+                                <span>{{ __('Community') }}</span>
+                                <svg class="ms-1 h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+                            </button>
+                        </x-slot>
+                        <x-slot name="content">
+                            <x-dropdown-link :href="route('guilds.page')" :active="request()->routeIs('guilds.page')">{{ __('Guilds') }}</x-dropdown-link>
+                        </x-slot>
+                    </x-dropdown>
+
                     <x-nav-link :href="route('premium.page')" :active="request()->routeIs('premium.page')">
                         {{ __('Premium') }}
                     </x-nav-link>
-                    <x-nav-link :href="route('jobs.page')" :active="request()->routeIs('jobs.page')">
-                        {{ __('Jobs') }}
-                    </x-nav-link>
-                    <x-nav-link :href="route('expeditions.page')" :active="request()->routeIs('expeditions.page')">
-                        {{ __('Expeditions') }}
-                    </x-nav-link>
-                    <x-nav-link :href="route('guilds.page')" :active="request()->routeIs('guilds.page')">
-                        {{ __('Guilds') }}
-                    </x-nav-link>
+
                     @if(Auth::user() && Auth::user()->is_admin)
-                    <x-nav-link :href="route('admin.page')" :active="request()->routeIs('admin.page')">
-                        {{ __('Admin') }}
-                    </x-nav-link>
+                        <x-nav-link :href="route('admin.page')" :active="request()->routeIs('admin.page')">
+                            {{ __('Admin') }}
+                        </x-nav-link>
                     @endif
                 </div>
             </div>
@@ -105,40 +122,38 @@
             <x-responsive-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">
                 {{ __('Dashboard') }}
             </x-responsive-nav-link>
-            <x-responsive-nav-link :href="route('bank.page')" :active="request()->routeIs('bank.page')">
-                {{ __('Bank') }}
-            </x-responsive-nav-link>
-            <x-responsive-nav-link :href="route('keeper.page')" :active="request()->routeIs('keeper.page')">
-                {{ __('Time Keeper') }}
-            </x-responsive-nav-link>
-            <x-responsive-nav-link :href="route('store.page')" :active="request()->routeIs('store.page')">
-                {{ __('Store') }}
-            </x-responsive-nav-link>
-            <x-responsive-nav-link :href="route('token_shop.page')" :active="request()->routeIs('token_shop.page')">
-                {{ __('Token Shop') }}
-            </x-responsive-nav-link>
-            <x-responsive-nav-link :href="route('travel.page')" :active="request()->routeIs('travel.page')">
-                {{ __('Travel') }}
-            </x-responsive-nav-link>
-            <x-responsive-nav-link :href="route('inventory.page')" :active="request()->routeIs('inventory.page')">
-                {{ __('Inventory') }}
-            </x-responsive-nav-link>
-            <x-responsive-nav-link :href="route('premium.page')" :active="request()->routeIs('premium.page')">
-                {{ __('Premium') }}
-            </x-responsive-nav-link>
-            <x-responsive-nav-link :href="route('jobs.page')" :active="request()->routeIs('jobs.page')">
-                {{ __('Jobs') }}
-            </x-responsive-nav-link>
-            <x-responsive-nav-link :href="route('expeditions.page')" :active="request()->routeIs('expeditions.page')">
-                {{ __('Expeditions') }}
-            </x-responsive-nav-link>
-            <x-responsive-nav-link :href="route('guilds.page')" :active="request()->routeIs('guilds.page')">
-                {{ __('Guilds') }}
-            </x-responsive-nav-link>
+
+            <div class="px-3 pt-3 text-xs font-semibold uppercase text-gray-500">{{ __('Gameplay') }}</div>
+            <div class="pl-5 space-y-1">
+                <x-responsive-nav-link :href="route('travel.page')" :active="request()->routeIs('travel.page')">{{ __('Travel') }}</x-responsive-nav-link>
+                <x-responsive-nav-link :href="route('expeditions.page')" :active="request()->routeIs('expeditions.page')">{{ __('Expeditions') }}</x-responsive-nav-link>
+                <x-responsive-nav-link :href="route('jobs.page')" :active="request()->routeIs('jobs.page')">{{ __('Jobs') }}</x-responsive-nav-link>
+                <x-responsive-nav-link :href="route('inventory.page')" :active="request()->routeIs('inventory.page')">{{ __('Inventory') }}</x-responsive-nav-link>
+            </div>
+
+            <div class="px-3 pt-3 text-xs font-semibold uppercase text-gray-500">{{ __('Economy') }}</div>
+            <div class="pl-5 space-y-1">
+                <x-responsive-nav-link :href="route('bank.page')" :active="request()->routeIs('bank.page')">{{ __('Bank') }}</x-responsive-nav-link>
+                <x-responsive-nav-link :href="route('keeper.page')" :active="request()->routeIs('keeper.page')">{{ __('Time Keeper') }}</x-responsive-nav-link>
+                <x-responsive-nav-link :href="route('store.page')" :active="request()->routeIs('store.page')">{{ __('Store') }}</x-responsive-nav-link>
+                <x-responsive-nav-link :href="route('token_shop.page')" :active="request()->routeIs('token_shop.page')">{{ __('Token Shop') }}</x-responsive-nav-link>
+            </div>
+
+            <div class="px-3 pt-3 text-xs font-semibold uppercase text-gray-500">{{ __('Community') }}</div>
+            <div class="pl-5 space-y-1">
+                <x-responsive-nav-link :href="route('guilds.page')" :active="request()->routeIs('guilds.page')">{{ __('Guilds') }}</x-responsive-nav-link>
+            </div>
+
+            <div class="px-3 pt-3 text-xs font-semibold uppercase text-gray-500">{{ __('Premium') }}</div>
+            <div class="pl-5 space-y-1">
+                <x-responsive-nav-link :href="route('premium.page')" :active="request()->routeIs('premium.page')">{{ __('Premium') }}</x-responsive-nav-link>
+            </div>
+
             @if(Auth::user() && Auth::user()->is_admin)
-            <x-responsive-nav-link :href="route('admin.page')" :active="request()->routeIs('admin.page')">
-                {{ __('Admin') }}
-            </x-responsive-nav-link>
+                <div class="px-3 pt-3 text-xs font-semibold uppercase text-gray-500">{{ __('Admin') }}</div>
+                <div class="pl-5 space-y-1">
+                    <x-responsive-nav-link :href="route('admin.page')" :active="request()->routeIs('admin.page')">{{ __('Admin Dashboard') }}</x-responsive-nav-link>
+                </div>
             @endif
         </div>
 
