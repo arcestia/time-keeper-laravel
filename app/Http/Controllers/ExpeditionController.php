@@ -89,8 +89,8 @@ class ExpeditionController extends Controller
     {
         $user = Auth::user();
         $now = now();
-        $claimed = 0; $totalXp = 0; $lootAgg = [];
-        // Process all finished active expeditions in batches; each row handled in its own transaction
+        $claimed = 0; $totalXp = 0; $totalGuildXp = 0; $lootAgg = [];
+        // Process all finished active expeditions in batches; each batch handled in a single transaction
         $batchSize = 500;
         while (true) {
             $toProcess = UserExpedition::where(['user_id'=>$user->id,'status'=>'active'])
@@ -100,123 +100,135 @@ class ExpeditionController extends Controller
                 ->limit($batchSize)
                 ->get();
             if ($toProcess->isEmpty()) { break; }
-            foreach ($toProcess as $ueRow) {
-                DB::transaction(function() use($user,$ueRow,$now,&$claimed,&$totalXp,&$lootAgg) {
-                $ue = UserExpedition::where(['id'=>$ueRow->id,'user_id'=>$user->id])->lockForUpdate()->first();
-                if (!$ue || $ue->status !== 'active' || !$ue->ends_at || $now->lt($ue->ends_at)) { return; }
-                $ue->status = 'completed';
-                $ue->save();
+            DB::transaction(function() use($user, $toProcess, $now, &$claimed, &$totalXp, &$totalGuildXp, &$lootAgg) {
+                // lock all rows again inside the transaction and eager load expedition
+                $ids = $toProcess->pluck('id')->all();
+                $rows = UserExpedition::with('expedition')->whereIn('id', $ids)->lockForUpdate()->get();
+
                 $cfg = config('expeditions');
-                $hours = max(1, (int) ceil(((int)$ue->duration_seconds)/3600));
-                $level = (int) optional($ue->expedition)->level ?? 1; // expedition level
+                // Aggregate values
+                $sumXp = 0; $sumGuildXp = 0; $sumTime = 0; $sumFood = 0; $sumWater = 0; $updates = [];
+                $lootMap = []; // store_item_id => ['name'=>..., 'qty'=>...]
                 $progress = app(ProgressService::class)->getOrCreate($user->id);
-                $uLevel = max(1, (int) $progress->level); // user level
-                $xpRaw = (int) (
-                    ($level * (float)($cfg['xp_per_level'] ?? 12))
-                    + ($uLevel * (float)($cfg['xp_per_user_level'] ?? 10))
-                    + $hours * (
-                        (float)($cfg['xp_per_hour_base'] ?? 10)
-                        + $level * (float)($cfg['xp_per_hour_per_level'] ?? 1.2)
-                        + $uLevel * (float)($cfg['xp_per_hour_per_user_level'] ?? 1.5)
-                    )
-                );
-                // composite multiplier by level, cost, energy, duration
-                $exp = $ue->expedition; $costSec = (int) ($exp->cost_seconds ?? 0); $energyPct = (int) ($exp->energy_cost_pct ?? 0);
-                $levMult = (float) ($cfg['level_multipliers'][$level] ?? 1.0);
-                $costW = (float) ($cfg['cost_weight'] ?? 0.0);
-                $energyW = (float) ($cfg['energy_weight'] ?? 0.0);
-                $consW = (float) ($cfg['consumable_weight'] ?? 0.0);
-                $mult = max(1.0, $levMult * (1.0 + $costSec * $costW + $energyPct * $energyW + $hours * $consW));
-                $xpRaw = (int) floor($xpRaw * $mult);
-                $xpVar = max((float)$cfg['variance_min'], 0.0);
-                $xpVarMax = max((float)$cfg['variance_max'], $xpVar);
-                $xpRoll = (int) random_int((int) floor($xpRaw * $xpVar), (int) ceil($xpRaw * $xpVarMax));
+                $uLevel = max(1, (int) $progress->level);
                 $prem = PremiumService::getOrCreate($user->id);
-                if (PremiumService::isActive($prem)) {
-                    $tier = PremiumService::tierFor((int)$prem->premium_seconds_accumulated);
-                    $benefits = PremiumService::benefitsForTier($tier);
-                    $mult = (float)($benefits['xp_multiplier'] ?? 1.0);
-                    if ($mult > 1.0) { $xpRoll = max(1, (int) floor($xpRoll * $mult)); }
-                }
-                // apply expedition mastery XP bonus and award mastery XP progress
+                $premActive = PremiumService::isActive($prem);
+                $premTier = $premActive ? PremiumService::tierFor((int)$prem->premium_seconds_accumulated) : 0;
+                $premBenefits = $premActive ? PremiumService::benefitsForTier($premTier) : [];
+                $xpMult = (float)($premBenefits['xp_multiplier'] ?? 1.0);
+                $timeMult = (float)($premBenefits['time_multiplier'] ?? 1.0);
                 $mastery = app(ExpeditionMasteryService::class)->getOrCreate($user->id);
                 $mBonuses = app(ExpeditionMasteryService::class)->bonusesForLevel((int)$mastery->level);
                 $mXpMult = (float)($mBonuses['xp_multiplier'] ?? 1.0);
-                if ($mXpMult > 1.0) { $xpRoll = max(1, (int) floor($xpRoll * $mXpMult)); }
-                app(ExpeditionMasteryService::class)->addXp($user->id, (int)$xpRaw);
-                app(ProgressService::class)->addXp($user->id, $xpRoll);
-                // Guild XP: award based on expedition level when claimed
-                $gm = GuildMember::where('user_id', $user->id)->first();
-                if ($gm && $gm->guild) {
-                    $ranges = [
-                        1 => [10, 25],
-                        2 => [30, 60],
-                        3 => [80, 200],
-                        4 => [200, 450],
-                        5 => [400, 800],
-                    ];
-                    $band = $ranges[$level] ?? [10, 25];
-                    $gxp = random_int($band[0], $band[1]);
-                    app(GuildLevelService::class)->addXp($gm->guild, $gxp);
-                    // Track member contribution
-                    $gm->increment('contribution_xp', $gxp);
+
+                foreach ($rows as $ue) {
+                    if ($ue->status !== 'active' || !$ue->ends_at || $now->lt($ue->ends_at)) { continue; }
+                    // mark completed -> claimed at end
+                    $ue->status = 'completed';
+                    $ue->save();
+
+                    $hours = max(1, (int) ceil(((int)$ue->duration_seconds)/3600));
+                    $level = (int) optional($ue->expedition)->level ?? 1;
+                    $xpRaw = (int) (
+                        ($level * (float)($cfg['xp_per_level'] ?? 12))
+                        + ($uLevel * (float)($cfg['xp_per_user_level'] ?? 10))
+                        + $hours * (
+                            (float)($cfg['xp_per_hour_base'] ?? 10)
+                            + $level * (float)($cfg['xp_per_hour_per_level'] ?? 1.2)
+                            + $uLevel * (float)($cfg['xp_per_hour_per_user_level'] ?? 1.5)
+                        )
+                    );
+                    $exp = $ue->expedition; $costSec = (int) ($exp->cost_seconds ?? 0); $energyPct = (int) ($exp->energy_cost_pct ?? 0);
+                    $levMult = (float) ($cfg['level_multipliers'][$level] ?? 1.0);
+                    $costW = (float) ($cfg['cost_weight'] ?? 0.0);
+                    $energyW = (float) ($cfg['energy_weight'] ?? 0.0);
+                    $consW = (float) ($cfg['consumable_weight'] ?? 0.0);
+                    $mult = max(1.0, $levMult * (1.0 + $costSec * $costW + $energyPct * $energyW + $hours * $consW));
+                    $xpRaw = (int) floor($xpRaw * $mult);
+                    $xpVar = max((float)$cfg['variance_min'], 0.0);
+                    $xpVarMax = max((float)$cfg['variance_max'], $xpVar);
+                    $xp = (int) random_int((int) floor($xpRaw * $xpVar), (int) ceil($xpRaw * $xpVarMax));
+                    $xpBaseForGuild = $xp; // base before bonuses
+                    if ($xpMult > 1.0) { $xp = max(1, (int) floor($xp * $xpMult)); }
+                    if ($mXpMult > 1.0) { $xp = max(1, (int) floor($xp * $mXpMult)); }
+                    $sumXp += $xp; $claimed++;
+                    $gxp = (int) floor($xpBaseForGuild * 0.001); $sumGuildXp += $gxp;
+                    // stats depletion
+                    $deplete = min(100, $hours); $sumFood += $deplete; $sumWater += $deplete;
+                    // time roll
+                    $timeRaw = (int) ($level * (int)$cfg['time_per_level'] + $hours * (int)$cfg['time_per_hour']);
+                    $timeRaw = (int) floor($timeRaw * $mult);
+                    $baseMargin = (float) ($cfg['time_profit_margin_base'] ?? 0.10);
+                    $perLvlMargin = (float) ($cfg['time_profit_margin_per_level'] ?? 0.03);
+                    $capMargin = (float) ($cfg['time_profit_margin_cap'] ?? 0.50);
+                    $effMargin = min($capMargin, $baseMargin + max(0, $level - 1) * $perLvlMargin);
+                    $minTime = (int) ceil($costSec * (1.0 + $effMargin));
+                    if ($timeRaw < $minTime) { $timeRaw = $minTime; }
+                    $timeRoll = (int) random_int((int) floor($timeRaw * $xpVar), (int) ceil($timeRaw * $xpVarMax));
+                    if ($timeMult > 1.0) { $timeRoll = max(0, (int) floor($timeRoll * $timeMult)); }
+                    $sumTime += $timeRoll;
+
+                    // loot aggregation
+                    $band = $cfg['level_qty_bands'][$level] ?? [1,2];
+                    $qtyPerHour = (int) $cfg['qty_per_hour'];
+                    $baseMin = (int) $band[0]; $baseMax = (int) $band[1];
+                    $items = StoreItem::where('is_active', true)->inRandomOrder()->limit(5)->get();
+                    $count = max(1, min(3, $level, $items->count()));
+                    $loot = [];
+                    for ($i=0; $i<$count; $i++) {
+                        $si = $items[$i]; if (!$si) break;
+                        $roll = random_int($baseMin, $baseMax);
+                        $qty = (int) min((int)$cfg['qty_max'], $roll + (int) floor($hours * $qtyPerHour));
+                        if ($qty <= 0) continue;
+                        $loot[] = ['key'=>$si->key,'name'=>$si->name,'qty'=>$qty];
+                        $lootAgg[$si->key] = $lootAgg[$si->key] ?? ['key'=>$si->key,'name'=>$si->name,'qty'=>0];
+                        $lootAgg[$si->key]['qty'] += $qty;
+                        // map by store_item_id for DB updates later
+                        if (!isset($lootMap[$si->id])) { $lootMap[$si->id] = ['name'=>$si->name,'qty'=>0]; }
+                        $lootMap[$si->id]['qty'] += $qty;
+                    }
+
+                    // persist row
+                    $ue->base_xp = (int)$xpBaseForGuild;
+                    $ue->loot = $loot; $ue->status = 'claimed'; $ue->save();
+                    // daily stats (kept per-row for correctness of date boundaries)
+                    app(\App\Services\StatsService::class)->incExpCompleted($user->id);
                 }
-                $totalXp += $xpRoll; $claimed++;
-                // deplete food/water
-                $deplete = min(100, $hours);
-                $stats = UserStats::where('user_id',$user->id)->lockForUpdate()->first();
-                if (!$stats) { $stats = UserStats::create(['user_id'=>$user->id,'energy'=>100,'food'=>100,'water'=>100,'leisure'=>100,'health'=>100]); }
-                $stats->food = max(0, (int)$stats->food - $deplete);
-                $stats->water = max(0, (int)$stats->water - $deplete);
-                $stats->save();
-                // time reward
-                $timeRaw = (int) ($level * (int)$cfg['time_per_level'] + $hours * (int)$cfg['time_per_hour']);
-                // apply same multiplier to time
-                $timeRaw = (int) floor($timeRaw * $mult);
-                // ensure profitability vs cost_seconds
-                $baseMargin = (float) ($cfg['time_profit_margin_base'] ?? 0.10);
-                $perLvlMargin = (float) ($cfg['time_profit_margin_per_level'] ?? 0.03);
-                $capMargin = (float) ($cfg['time_profit_margin_cap'] ?? 0.50);
-                $effMargin = min($capMargin, $baseMargin + max(0, $level - 1) * $perLvlMargin);
-                $minTime = (int) ceil($costSec * (1.0 + $effMargin));
-                if ($timeRaw < $minTime) { $timeRaw = $minTime; }
-                $timeRoll = (int) random_int((int) floor($timeRaw * $xpVar), (int) ceil($timeRaw * $xpVarMax));
-                if (PremiumService::isActive($prem)) {
-                    $tier = PremiumService::tierFor((int)$prem->premium_seconds_accumulated);
-                    $benefits = PremiumService::benefitsForTier($tier);
-                    $tm = (float)($benefits['time_multiplier'] ?? 1.0);
-                    if ($tm > 1.0) { $timeRoll = max(0, (int) floor($timeRoll * $tm)); }
+
+                // Apply aggregate effects
+                app(ExpeditionMasteryService::class)->addXp($user->id, 0); // ensure service caches are safe
+                app(ProgressService::class)->addXp($user->id, (int)$sumXp);
+                $totalXp += (int)$sumXp; $totalGuildXp += (int)$sumGuildXp;
+                // Guild XP apply once
+                $gm = GuildMember::where('user_id', $user->id)->lockForUpdate()->first();
+                if ($gm && $gm->guild && $sumGuildXp > 0) {
+                    app(GuildLevelService::class)->addXp($gm->guild, (int)$sumGuildXp);
+                    $gm->increment('contribution_xp', (int)$sumGuildXp);
                 }
-                $wallet = UserTimeWallet::where('user_id',$user->id)->lockForUpdate()->first();
-                if (!$wallet) { $wallet = UserTimeWallet::create(['user_id'=>$user->id,'available_seconds'=>0,'last_applied_at'=>$now,'drain_rate'=>1.000,'is_active'=>true]); }
-                $wallet->available_seconds = (int)$wallet->available_seconds + $timeRoll; $wallet->save();
-                // loot (level-based qty, send to storage)
-                $loot = [];
-                $band = $cfg['level_qty_bands'][$level] ?? [1,2];
-                $qtyPerHour = (int) $cfg['qty_per_hour'];
-                $baseMin = (int) $band[0]; $baseMax = (int) $band[1];
-                $items = StoreItem::where('is_active', true)->inRandomOrder()->limit(5)->get();
-                // decide number of different items by level (simple): 1..min(level,3)
-                $count = max(1, min(3, $level, $items->count()));
-                for ($i=0; $i<$count; $i++) {
-                    $si = $items[$i]; if (!$si) break;
-                    $roll = random_int($baseMin, $baseMax);
-                    $qty = (int) min((int)$cfg['qty_max'], $roll + (int) floor($hours * $qtyPerHour));
-                    if ($qty <= 0) continue;
-                    $loot[] = ['key'=>$si->key,'name'=>$si->name,'qty'=>$qty];
-                    $sto = UserStorageItem::where(['user_id'=>$user->id,'store_item_id'=>$si->id])->lockForUpdate()->first();
-                    if (!$sto) { $sto = UserStorageItem::create(['user_id'=>$user->id,'store_item_id'=>$si->id,'quantity'=>0]); }
-                    $sto->quantity = (int)$sto->quantity + $qty; $sto->save();
-                    if (!isset($lootAgg[$si->key])) { $lootAgg[$si->key] = ['key'=>$si->key,'name'=>$si->name,'qty'=>0]; }
-                    $lootAgg[$si->key]['qty'] += $qty;
+                // Wallet
+                if ($sumTime > 0) {
+                    $wallet = UserTimeWallet::where('user_id',$user->id)->lockForUpdate()->first();
+                    if (!$wallet) { $wallet = UserTimeWallet::create(['user_id'=>$user->id,'available_seconds'=>0,'last_applied_at'=>$now,'drain_rate'=>1.000,'is_active'=>true]); }
+                    $wallet->available_seconds = (int)$wallet->available_seconds + (int)$sumTime; $wallet->save();
                 }
-                $ue->loot = $loot; $ue->status = 'claimed'; $ue->save();
-                // daily stats: increment expeditions completed (UTC boundaries) for bulk claim
-                app(\App\Services\StatsService::class)->incExpCompleted($user->id);
-                });
-            }
+                // Stats
+                if ($sumFood>0 || $sumWater>0) {
+                    $stats = UserStats::where('user_id',$user->id)->lockForUpdate()->first();
+                    if (!$stats) { $stats = UserStats::create(['user_id'=>$user->id,'energy'=>100,'food'=>100,'water'=>100,'leisure'=>100,'health'=>100]); }
+                    $stats->food = max(0, (int)$stats->food - (int)$sumFood);
+                    $stats->water = max(0, (int)$stats->water - (int)$sumWater);
+                    $stats->save();
+                }
+                // Storage items (update per item id)
+                foreach ($lootMap as $itemId => $info) {
+                    $sto = UserStorageItem::where(['user_id'=>$user->id,'store_item_id'=>$itemId])->lockForUpdate()->first();
+                    if (!$sto) { $sto = UserStorageItem::create(['user_id'=>$user->id,'store_item_id'=>$itemId,'quantity'=>0]); }
+                    $sto->quantity = (int)$sto->quantity + (int)$info['qty'];
+                    $sto->save();
+                }
+            });
         }
-        return response()->json(['ok'=>true,'claimed'=>$claimed,'total_xp'=>$totalXp,'loot'=>array_values($lootAgg)]);
+        return response()->json(['ok'=>true,'claimed'=>$claimed,'total_xp'=>$totalXp,'total_guild_xp'=>$totalGuildXp,'loot'=>array_values($lootAgg)]);
     }
 
     public function catalog(): JsonResponse
@@ -458,6 +470,7 @@ class ExpeditionController extends Controller
             $xpVar = max((float)$cfg['variance_min'], 0.0);
             $xpVarMax = max((float)$cfg['variance_max'], $xpVar);
             $xp = (int) random_int((int) floor($xpRaw * $xpVar), (int) ceil($xpRaw * $xpVarMax));
+            $xpBaseForGuild = $xp; // base XP before premium/mastery bonuses
             $prem = PremiumService::getOrCreate($user->id);
             if (PremiumService::isActive($prem)) {
                 $tier = PremiumService::tierFor((int)$prem->premium_seconds_accumulated);
@@ -472,21 +485,15 @@ class ExpeditionController extends Controller
             if ($mXpMult > 1.0) { $xp = max(1, (int) floor($xp * $mXpMult)); }
             app(ExpeditionMasteryService::class)->addXp($user->id, (int)$xpRaw);
             app(ProgressService::class)->addXp($user->id, $xp);
-            // Guild XP: award based on expedition level when claimed
+            // Guild XP: 0.1% of BASE XP (before premium/mastery bonuses)
             $gm = GuildMember::where('user_id', $user->id)->first();
             if ($gm && $gm->guild) {
-                $ranges = [
-                    1 => [10, 25],
-                    2 => [30, 60],
-                    3 => [80, 200],
-                    4 => [200, 450],
-                    5 => [400, 800],
-                ];
-                $band = $ranges[$level] ?? [10, 25];
-                $gxp = random_int($band[0], $band[1]);
-                app(GuildLevelService::class)->addXp($gm->guild, $gxp);
-                // Track member contribution
-                $gm->increment('contribution_xp', $gxp);
+                $gxp = (int) floor($xpBaseForGuild * 0.001);
+                if ($gxp > 0) {
+                    app(GuildLevelService::class)->addXp($gm->guild, $gxp);
+                    // Track member contribution
+                    $gm->increment('contribution_xp', $gxp);
+                }
             }
             // deplete food/water based on duration: 1% per hour rounded up
             $hours = max(1, (int) ceil(((int)$ue->duration_seconds)/3600));

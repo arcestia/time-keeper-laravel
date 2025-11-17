@@ -328,6 +328,28 @@
                 }
                 return [lo, hi];
             }
+            function estXpBase(level, seconds, costSec=0, energyPct=0){
+                const h = Math.max(1, Math.ceil((parseInt(seconds,10)||0)/3600));
+                const lvl = Math.max(1, parseInt(level,10)||1);
+                const uLvl = Math.max(1, parseInt(USER?.level||1,10));
+                const base = EXP_CFG.xp_per_hour_base ?? 10;
+                const perLv = EXP_CFG.xp_per_hour_per_level ?? 1.2;
+                const perUserLv = EXP_CFG.xp_per_hour_per_user_level ?? 1.5;
+                let raw = (
+                    (lvl * (EXP_CFG.xp_per_level ?? 12))
+                    + (uLvl * (EXP_CFG.xp_per_user_level ?? 10))
+                    + (h * (base + lvl * perLv + uLvl * perUserLv))
+                );
+                const levMult = (EXP_CFG.level_multipliers||{})[lvl] ?? 1.0;
+                const costW = EXP_CFG.cost_weight ?? 0.0;
+                const energyW = EXP_CFG.energy_weight ?? 0.0;
+                const consW = EXP_CFG.consumable_weight ?? 0.0;
+                const mult = Math.max(1.0, levMult * (1.0 + (Number(costSec)||0)*costW + (Number(energyPct)||0)*energyW + h*consW));
+                raw = Math.floor(raw * mult);
+                const vmin = EXP_CFG.variance_min || 0.9, vmax = Math.max(EXP_CFG.variance_max||1.2, vmin);
+                const lo = Math.floor(raw * vmin), hi = Math.ceil(raw * vmax);
+                return [lo, hi];
+            }
             function estTime(level, seconds, costSec=0, energyPct=0){
                 const h = Math.max(1, Math.ceil((parseInt(seconds,10)||0)/3600));
                 const lvl = Math.max(1, parseInt(level,10)||1);
@@ -360,15 +382,10 @@
                 const max = Math.min(EXP_CFG.qty_max||16, (band[1]||2) + Math.floor(h * perHour));
                 return [min, Math.max(min, max)];
             }
-            function estGuildXp(level){
-                const ranges = {
-                    1: [10, 25],
-                    2: [30, 60],
-                    3: [80, 200],
-                    4: [200, 450],
-                    5: [400, 800],
-                };
-                return ranges[level] || ranges[1];
+            function guildXpFromXpRange(xpLo, xpHi){
+                const lo = Math.max(0, Math.floor((Number(xpLo)||0) * 0.001));
+                const hi = Math.max(lo, Math.floor((Number(xpHi)||0) * 0.001));
+                return [lo, hi];
             }
             function updateProgress(el){
                 const start = parseInt(el.getAttribute('data-start')||'0',10)||0;
@@ -394,12 +411,14 @@
                     catStatus.textContent='';
                     const xpMinMax = estXp(currentLevel, e.min_duration_seconds, e.cost_seconds, e.energy_cost_pct);
                     const xpMaxMax = estXp(currentLevel, e.max_duration_seconds, e.cost_seconds, e.energy_cost_pct);
+                    const xpBaseMinMax = estXpBase(currentLevel, e.min_duration_seconds, e.cost_seconds, e.energy_cost_pct);
+                    const xpBaseMaxMax = estXpBase(currentLevel, e.max_duration_seconds, e.cost_seconds, e.energy_cost_pct);
                     const tMinMax = estTime(currentLevel, e.min_duration_seconds, e.cost_seconds, e.energy_cost_pct);
                     const tMaxMax = estTime(currentLevel, e.max_duration_seconds, e.cost_seconds, e.energy_cost_pct);
                     const qMin = estItemQty(currentLevel, e.min_duration_seconds);
                     const qMax = estItemQty(currentLevel, e.max_duration_seconds);
-                    const gXp = estGuildXp(currentLevel);
-                    levelMeta.textContent = `Level ${currentLevel} • Duration: ${fmtHMS(e.min_duration_seconds)} - ${fmtHMS(e.max_duration_seconds)} • Cost: ${fmtHMS(e.cost_seconds)} • Energy: -${e.energy_cost_pct}% • Est. XP: ${xpMinMax[0]}–${xpMaxMax[1]} • Est. Time: ${tMinMax[0]}–${tMaxMax[1]} sec • Est. item qty per drop: ${qMin[0]}–${qMax[1]} • Est. guild XP per expedition: ${gXp[0]}–${gXp[1]}`;
+                    const gXp = guildXpFromXpRange(xpBaseMinMax[0], xpBaseMaxMax[1]);
+                    levelMeta.textContent = `Level ${currentLevel} • Duration: ${fmtHMS(e.min_duration_seconds)} - ${fmtHMS(e.max_duration_seconds)} • Cost: ${fmtHMS(e.cost_seconds)} • Energy: -${e.energy_cost_pct}% • Est. XP: ${xpMinMax[0]}–${xpMaxMax[1]} • Est. Time: ${tMinMax[0]}–${tMaxMax[1]} sec • Est. item qty per drop: ${qMin[0]}–${qMax[1]} • Est. guild XP (0.1% of base): ${gXp[0]}–${gXp[1]}`;
                 }catch(e){ catStatus.textContent='Unable to load expeditions'; }
             }
 
@@ -456,8 +475,9 @@
                 const tmMM = estTime(lvl, r.duration_seconds||0, r.expedition?.cost_seconds||0, r.expedition?.energy_cost_pct||0);
                 badges.appendChild(badge(`${tmMM[0]}–${tmMM[1]}s`,'bg-amber-100','text-amber-700'));
                 badges.appendChild(dot.cloneNode(true));
-                const gXp = estGuildXp(lvl);
-                badges.appendChild(document.createTextNode('Guild XP'));
+                const xpBaseMM = estXpBase(lvl, r.duration_seconds||0, r.expedition?.cost_seconds||0, r.expedition?.energy_cost_pct||0);
+                const gXp = guildXpFromXpRange(xpBaseMM[0], xpBaseMM[1]);
+                badges.appendChild(document.createTextNode('Guild XP (0.1% base)'));
                 badges.appendChild(badge(`${gXp[0]}–${gXp[1]}`,'bg-purple-100','text-purple-700'));
                 return badges;
             }
@@ -541,7 +561,11 @@
                             try{ 
                                 const res = await fetch(`/api/expeditions/claim/${r.id}`, { method:'POST', headers:{'Accept':'application/json','X-CSRF-TOKEN': csrf,'X-Requested-With':'XMLHttpRequest' } }); 
                                 if (!res.ok) { const e = await res.json().catch(()=>({})); const msg = e && e.message ? e.message : 'Failed to claim'; throw new Error(msg); }
-                                await loadMy(); await ensureSwal(); Swal.fire({icon:'success', title:'Claimed'}); 
+                                const js = await res.json().catch(()=>({}));
+                                await loadMy(); await ensureSwal();
+                                const guildXp = Number(js.guild_xp||0);
+                                const xp = Number(js.xp||0);
+                                Swal.fire({icon:'success', title:'Claimed', text: `+${xp} XP${guildXp>0? ` • Guild +${guildXp} XP`:''}`}); 
                             }catch(err){ await ensureSwal(); Swal.fire({icon:'error', title: (err && err.message) ? err.message : 'Failed to claim'}); }
                         });
                         const wrap=document.createElement('div'); wrap.appendChild(document.createElement('div')).className='';
@@ -583,6 +607,10 @@
                                 lootDiv.textContent = 'Loot: (none)';
                             }
                             container.appendChild(lootDiv);
+                            const baseXp = Number(r.base_xp||0); const gxp = Math.floor(baseXp * 0.001);
+                            const gLine = document.createElement('div'); gLine.className='text-xs text-purple-700 mt-0.5';
+                            gLine.textContent = `Base XP: ${baseXp.toLocaleString()} • Guild XP: ${gxp.toLocaleString()}`;
+                            container.appendChild(gLine);
                         }
                         const li2=document.createElement('li'); li2.className='py-3'; li2.appendChild(container); listCompleted.appendChild(li2); cC++;
                     }
@@ -609,7 +637,11 @@
                         const r = await res.json();
                         await ensureSwal();
                         const loot = (r.loot||[]).map(x => `${x.name} x${x.qty}`).join(', ');
-                        Swal.fire({ icon:'success', title:`Claimed ${r.claimed} expeditions`, text: `+${r.total_xp} XP${loot? ' • Loot: '+loot:''}` });
+                        const addGuild = Number(r.total_guild_xp||0);
+                        const textParts = [`+${r.total_xp} XP`];
+                        if (addGuild>0) textParts.push(`Guild +${addGuild} XP`);
+                        if (loot) textParts.push(`Loot: ${loot}`);
+                        Swal.fire({ icon:'success', title:`Claimed ${r.claimed} expeditions`, text: textParts.join(' • ') });
                         await loadMy();
                     }catch(err){ await ensureSwal(); Swal.fire({icon:'error', title: (err && err.message) ? err.message : 'Failed to claim all'}); }
                 });
