@@ -10,6 +10,9 @@ use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\ExpeditionController;
 use App\Http\Controllers\TokenShopController;
 use App\Http\Controllers\ExchangeController;
+use App\Http\Controllers\LifetimeUpgradeController;
+use App\Services\PremiumService;
+use Illuminate\Support\Facades\Auth;
 use App\Http\Controllers\TradeController;
 use App\Http\Controllers\GuildController;
 use Illuminate\Support\Facades\Route;
@@ -129,6 +132,17 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/api/exchange/my', [ExchangeController::class, 'my'])->name('exchange.my');
     Route::post('/api/exchange/orders', [ExchangeController::class, 'place'])->name('exchange.place');
     Route::post('/api/exchange/orders/{id}/cancel', [ExchangeController::class, 'cancel'])->name('exchange.cancel');
+
+    // Lifetime Premium Upgrades (Diamond-based)
+    Route::get('/lifetime-upgrades', function(){
+        $uid = Auth::id();
+        if (!$uid || !PremiumService::isLifetimeOrTier20($uid)) { abort(403, 'Lifetime Premium required'); }
+        return view('premium.upgrades');
+    })->name('lifetime.upgrades.page');
+    Route::get('/api/lifetime-upgrades/me', [LifetimeUpgradeController::class, 'me'])->name('lifetime.upgrades.me');
+    Route::post('/api/lifetime-upgrades/stats-cap', [LifetimeUpgradeController::class, 'buyStatsCapStep'])->name('lifetime.upgrades.stats_cap');
+    Route::post('/api/lifetime-upgrades/extra-slot', [LifetimeUpgradeController::class, 'buyExtraSlot'])->name('lifetime.upgrades.extra_slot');
+    Route::post('/api/lifetime-upgrades/unlimited-energy', [LifetimeUpgradeController::class, 'buyUnlimitedEnergy'])->name('lifetime.upgrades.unlimited_energy');
 
     // Time Keeper stats
     Route::get('/keeper', [TimeKeeperController::class, 'page'])->name('keeper.page');

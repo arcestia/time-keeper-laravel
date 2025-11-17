@@ -144,6 +144,32 @@ class PremiumService
             $benefits = self::benefitsForTier($tier);
             $mult = (float)($benefits['cap_multiplier'] ?? 1.0);
         }
+        // Lifetime upgrades: +50% per step, clamp to 20x total
+        $up = \App\Models\UserLifetimeUpgrade::where('user_id',$userId)->first();
+        if ($up) {
+            $mult += 0.5 * max(0, (int)$up->stats_cap_steps);
+        }
+        $mult = min(20.0, max(1.0, (float)$mult));
         return max(100, (int) floor(100 * $mult));
+    }
+
+    public static function unlimitedEnergyForUser(int $userId): bool
+    {
+        $up = \App\Models\UserLifetimeUpgrade::where('user_id',$userId)->first();
+        return (bool)($up && $up->unlimited_energy);
+    }
+
+    public static function lifetimeExtraSlotsForUser(int $userId): int
+    {
+        $up = \App\Models\UserLifetimeUpgrade::where('user_id',$userId)->first();
+        return (int)($up->extra_expedition_slots ?? 0);
+    }
+
+    public static function isLifetimeOrTier20(int $userId): bool
+    {
+        $p = self::getOrCreate($userId);
+        if ($p->lifetime) return true;
+        $tier = self::tierFor((int)$p->premium_seconds_accumulated);
+        return $tier >= 20;
     }
 }

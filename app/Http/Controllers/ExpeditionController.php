@@ -65,17 +65,19 @@ class ExpeditionController extends Controller
         $now = now();
 
         return DB::transaction(function() use($user,$level,$now){
-            // compute allowed slots (same as start())
+            // compute allowed slots: base from premium tier (or 1), plus mastery extras, lifetime extras, and token shop upgrades
             $prem = \App\Services\PremiumService::getOrCreate($user->id);
-            $allowed = 1;
+            $baseSlots = 1;
             if (\App\Services\PremiumService::isActive($prem)) {
                 $tier = \App\Services\PremiumService::tierFor((int)$prem->premium_seconds_accumulated);
                 $benefits = \App\Services\PremiumService::benefitsForTier($tier);
-                $allowed = max(1, (int)($benefits['expedition_total_slots'] ?? 1));
+                $baseSlots = max(1, (int)($benefits['expedition_total_slots'] ?? 1));
             }
+            $allowed = (int)$baseSlots;
             $mastery = app(\App\Services\ExpeditionMasteryService::class)->getOrCreate($user->id);
             $mBonuses = app(\App\Services\ExpeditionMasteryService::class)->bonusesForLevel((int)$mastery->level);
-            $allowed = (int)$allowed + (int)($mBonuses['expedition_extra_slots'] ?? 0);
+            $allowed += (int)($mBonuses['expedition_extra_slots'] ?? 0);
+            $allowed += (int) \App\Services\PremiumService::lifetimeExtraSlotsForUser($user->id);
             $upgrade = \App\Models\UserExpeditionUpgrade::query()->where('user_id',$user->id)->first();
             if ($upgrade) {
                 $extraPerm = (int)$upgrade->permanent_slots;
@@ -118,7 +120,9 @@ class ExpeditionController extends Controller
                 $prem = \App\Services\PremiumService::getOrCreate($user->id);
                 $capMult = 1.0; if (\App\Services\PremiumService::isActive($prem)) { $tier = \App\Services\PremiumService::tierFor((int)$prem->premium_seconds_accumulated); $capMult = (float) (\App\Services\PremiumService::benefitsForTier($tier)['cap_multiplier'] ?? 1.0); }
                 $cap = (int) floor(100 * $capMult);
-                $stats->energy = max(0, (int)$stats->energy - (int)$sumEnergyCost);
+                if (!\App\Services\PremiumService::unlimitedEnergyForUser($user->id)) {
+                    $stats->energy = max(0, (int)$stats->energy - (int)$sumEnergyCost);
+                }
                 $stats->energy = min($cap, (int)$stats->energy);
                 $stats->save();
             }
@@ -459,6 +463,8 @@ class ExpeditionController extends Controller
             $mastery = app(ExpeditionMasteryService::class)->getOrCreate($user->id);
             $mBonuses = app(ExpeditionMasteryService::class)->bonusesForLevel((int)$mastery->level);
             $allowed = (int)$allowed + (int)($mBonuses['expedition_extra_slots'] ?? 0);
+            $allowed += (int) PremiumService::lifetimeExtraSlotsForUser($user->id);
+            $allowed = min(50, (int)$allowed);
 
             // add token shop extra slots (permanent + active temporary)
             $upgrade = UserExpeditionUpgrade::query()->where('user_id', $user->id)->first();
@@ -488,7 +494,9 @@ class ExpeditionController extends Controller
             $prem = PremiumService::getOrCreate($user->id);
             $capMult = 1.0; if (PremiumService::isActive($prem)) { $tier = PremiumService::tierFor((int)$prem->premium_seconds_accumulated); $capMult = (float) (PremiumService::benefitsForTier($tier)['cap_multiplier'] ?? 1.0); }
             $cap = (int) floor(100 * $capMult);
-            $stats->energy = max(0, (int)$stats->energy - (int)$exp->energy_cost_pct);
+            if (!PremiumService::unlimitedEnergyForUser($user->id)) {
+                $stats->energy = max(0, (int)$stats->energy - (int)$exp->energy_cost_pct);
+            }
             $stats->energy = min($cap, (int)$stats->energy);
             $stats->save();
             return response()->json(['ok'=>true,'expedition'=>$ue]);

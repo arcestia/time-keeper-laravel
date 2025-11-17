@@ -41,7 +41,10 @@
                             <div class="text-sm text-gray-700">Expedition slots <span id="pm-exp-slots">-</span></div>
                             <div class="text-sm text-gray-700">Store discount <span id="pm-disc">-</span>%</div>
                             <div class="text-sm text-gray-700">Heals/week <span id="pm-heals">-</span></div>
-                            <div class="mt-3"><button id="pm-tiers-btn-active" type="button" class="px-3 py-2 border rounded text-sm">View Tiers</button></div>
+                            <div class="mt-3 flex items-center gap-2 flex-wrap">
+                                <button id="pm-tiers-btn-active" type="button" class="px-3 py-2 border rounded text-sm">View Tiers</button>
+                                <a id="pm-lt-btn" href="/lifetime-upgrades" class="px-3 py-2 rounded text-sm bg-fuchsia-600 text-white">Lifetime Upgrades</a>
+                            </div>
                         </div>
                     </div>
 
@@ -162,6 +165,12 @@
                                     pw.classList.add('hidden');
                                 }
                                 pmActive = !!d.active; pmLifetime = !!d.lifetime; pmRemaining = parseInt(d.active_seconds||0,10)||0;
+                                // Show Lifetime Upgrades button only for Lifetime or Tier 20
+                                const ltBtn = document.getElementById('pm-lt-btn');
+                                if (ltBtn) {
+                                    if (d.lifetime || (parseInt(d.tier||0,10) >= 20)) ltBtn.classList.remove('hidden');
+                                    else ltBtn.classList.add('hidden');
+                                }
                             }
                             load();
                             function getSource(){
