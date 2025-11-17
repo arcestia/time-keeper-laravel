@@ -98,7 +98,7 @@ class ExpeditionController extends Controller
                 $query->whereIn('expedition_id', function($q) use ($level){ $q->select('id')->from('expeditions')->where('level',$level); });
             }
             $toStart = $query->orderBy('id')->limit($remaining)->get();
-            $started = 0;
+            $started = 0; $sumEnergyCost = 0;
             foreach ($toStart as $row) {
                 $ue = \App\Models\UserExpedition::where(['id'=>$row->id,'user_id'=>$user->id])->lockForUpdate()->first();
                 if (!$ue || $ue->status !== 'pending') { continue; }
@@ -107,6 +107,20 @@ class ExpeditionController extends Controller
                 $ue->ends_at = $now->copy()->addSeconds((int)$ue->duration_seconds);
                 $ue->save();
                 $started++;
+                // accumulate energy cost
+                $exp = \App\Models\Expedition::find($ue->expedition_id);
+                if ($exp) { $sumEnergyCost += (int)$exp->energy_cost_pct; }
+            }
+            // Deduct total energy like start()
+            if ($started > 0) {
+                $stats = \App\Models\UserStats::where('user_id',$user->id)->lockForUpdate()->first();
+                if (!$stats) { $stats = \App\Models\UserStats::create(['user_id'=>$user->id,'energy'=>100,'food'=>100,'water'=>100,'leisure'=>100,'health'=>100]); }
+                $prem = \App\Services\PremiumService::getOrCreate($user->id);
+                $capMult = 1.0; if (\App\Services\PremiumService::isActive($prem)) { $tier = \App\Services\PremiumService::tierFor((int)$prem->premium_seconds_accumulated); $capMult = (float) (\App\Services\PremiumService::benefitsForTier($tier)['cap_multiplier'] ?? 1.0); }
+                $cap = (int) floor(100 * $capMult);
+                $stats->energy = max(0, (int)$stats->energy - (int)$sumEnergyCost);
+                $stats->energy = min($cap, (int)$stats->energy);
+                $stats->save();
             }
             return response()->json(['ok'=>true,'started'=>$started,'slots_remaining'=>max(0,$remaining-$started)]);
         });
@@ -490,6 +504,11 @@ class ExpeditionController extends Controller
             if (!$ue) { return response()->json(['ok'=>false,'message'=>'Expedition not found'], 404); }
             if ($ue->status !== 'active') { return response()->json(['ok'=>false,'message'=>'Expedition is not active'], 422); }
             if (!$ue->ends_at || $now->lt($ue->ends_at)) { return response()->json(['ok'=>false,'message'=>'Expedition not finished yet'], 422); }
+            // Gate claim when food or water is 0
+            $statsGate = UserStats::where('user_id',$user->id)->lockForUpdate()->first();
+            if ($statsGate && ( (int)$statsGate->food <= 0 || (int)$statsGate->water <= 0)) {
+                return response()->json(['ok'=>false,'message'=>'Cannot claim: Food/Water is 0. Please replenish first.'], 422);
+            }
             $ue->status = 'completed';
             $ue->save();
             $cfg = config('expeditions');

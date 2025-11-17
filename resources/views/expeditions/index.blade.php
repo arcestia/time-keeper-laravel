@@ -651,6 +651,12 @@
                         }
                         Swal.close();
                         await ensureSwal();
+                        if (last.status==='blocked') {
+                            await ensureSwal();
+                            Swal.fire({icon:'warning', title:'Claim All paused', text: last.message || 'Food/Water is 0. Please replenish and try again.'});
+                            await loadMy();
+                            return;
+                        }
                         if (last.status==='error') { throw new Error(last.error || 'Claim-all failed'); }
                         const lootStr = Object.entries(last.loot||{}).map(([name,qty])=>`${name} x${qty}`).join(', ');
                         const parts = [`+${last.total_xp||0} XP`];

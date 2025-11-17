@@ -52,6 +52,15 @@ class ClaimAllExpeditionsJob implements ShouldQueue
         Cache::put($cacheKey, $state, 3600);
 
         try {
+            // Block if Food/Water at 0
+            $stats0 = \App\Models\UserStats::where('user_id',$this->userId)->first();
+            if ($stats0 && ( (int)$stats0->food <= 0 || (int)$stats0->water <= 0)) {
+                $state['status'] = 'blocked';
+                $state['message'] = 'Cannot claim: Food/Water is 0. Please replenish first.';
+                $state['updated_at'] = now()->toIso8601String();
+                Cache::put($cacheKey, $state, 3600);
+                return;
+            }
             while (true) {
                 $now = now();
                 $toProcess = UserExpedition::where(['user_id'=>$this->userId,'status'=>'active'])
@@ -198,6 +207,16 @@ class ClaimAllExpeditionsJob implements ShouldQueue
                 $state['remaining'] = $remaining;
                 $state['updated_at'] = now()->toIso8601String();
                 Cache::put($cacheKey, $state, 3600);
+
+                // Re-check block condition after each batch
+                $statsAfter = \App\Models\UserStats::where('user_id',$this->userId)->first();
+                if ($statsAfter && ( (int)$statsAfter->food <= 0 || (int)$statsAfter->water <= 0)) {
+                    $state['status'] = 'blocked';
+                    $state['message'] = 'Claim-all paused: Food/Water reached 0. Refill to continue.';
+                    $state['updated_at'] = now()->toIso8601String();
+                    Cache::put($cacheKey, $state, 3600);
+                    return;
+                }
 
                 // small delay to prevent tight loop hammering DB
                 usleep(100000); // 100ms
