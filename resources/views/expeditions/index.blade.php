@@ -646,7 +646,7 @@
                             if (!st.ok) continue;
                             const js = await st.json().catch(()=>null); if (!js || !js.ok) continue;
                             last = js;
-                            if (js.status==='done' || js.status==='error') { done = true; break; }
+                            if (js.status==='done' || js.status==='error' || js.status==='idle') { done = true; break; }
                             guard++;
                         }
                         Swal.close();
@@ -658,6 +658,16 @@
                             return;
                         }
                         if (last.status==='error') { throw new Error(last.error || 'Claim-all failed'); }
+                        if (guard>=600 && !done) {
+                            // fallback: guard exceeded, show last known values to unblock UI
+                            const lootStr = Object.entries(last.loot||{}).map(([name,qty])=>`${name} x${qty}`).join(', ');
+                            const parts = [`+${last.total_xp||0} XP`];
+                            if ((last.total_guild_xp||0)>0) parts.push(`Guild +${last.total_guild_xp} XP`);
+                            if (lootStr) parts.push(`Loot: ${lootStr}`);
+                            Swal.fire({ icon:'info', title:`Claiming timed out`, text: parts.join(' • ') });
+                            await loadMy();
+                            return;
+                        }
                         const lootStr = Object.entries(last.loot||{}).map(([name,qty])=>`${name} x${qty}`).join(', ');
                         const parts = [`+${last.total_xp||0} XP`];
                         if ((last.total_guild_xp||0)>0) parts.push(`Guild +${last.total_guild_xp} XP`);

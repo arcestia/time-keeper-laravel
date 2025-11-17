@@ -9,6 +9,7 @@ use App\Http\Controllers\StoreController;
 use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\ExpeditionController;
 use App\Http\Controllers\TokenShopController;
+use App\Http\Controllers\ExchangeController;
 use App\Http\Controllers\TradeController;
 use App\Http\Controllers\GuildController;
 use Illuminate\Support\Facades\Route;
@@ -121,6 +122,13 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/api/token-shop/slot-stats', [TokenShopController::class, 'slotStats'])->name('token_shop.slot_stats');
     Route::post('/api/token-shop/exchange', [TokenShopController::class, 'exchangeToBank'])->name('token_shop.exchange');
     Route::post('/api/token-shop/convert', [TokenShopController::class, 'convertTokens'])->name('token_shop.convert');
+
+    // Token Exchange
+    Route::get('/exchange', [ExchangeController::class, 'page'])->name('exchange.page');
+    Route::get('/api/exchange/orderbook', [ExchangeController::class, 'orderbook'])->name('exchange.orderbook');
+    Route::get('/api/exchange/my', [ExchangeController::class, 'my'])->name('exchange.my');
+    Route::post('/api/exchange/orders', [ExchangeController::class, 'place'])->name('exchange.place');
+    Route::post('/api/exchange/orders/{id}/cancel', [ExchangeController::class, 'cancel'])->name('exchange.cancel');
 
     // Time Keeper stats
     Route::get('/keeper', [TimeKeeperController::class, 'page'])->name('keeper.page');
