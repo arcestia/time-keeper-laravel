@@ -153,6 +153,7 @@ class AdminController extends Controller
                 'lifetime' => (bool)$p->lifetime,
                 'tier' => (int)$tier,
                 'cap_percent' => (int)$cap,
+                'unlimited_energy' => (bool) PremiumService::unlimitedEnergyForUser($target->id),
             ],
         ]);
     }
@@ -174,7 +175,9 @@ class AdminController extends Controller
 
         $stats = DB::transaction(function () use ($target, $validated) {
             $stats = UserStats::firstOrCreate(['user_id' => $target->id]);
+            $unlimited = PremiumService::unlimitedEnergyForUser($target->id);
             foreach ($validated as $k => $v) {
+                if ($unlimited && $k === 'energy') { continue; }
                 $stats->{$k} = (int)$v;
             }
             $cap = PremiumService::statsCapPercentForUser($target->id);

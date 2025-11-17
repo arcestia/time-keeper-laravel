@@ -198,8 +198,12 @@
                                     currentCap = Math.max(100, parseInt((data.premium && data.premium.cap_percent) || 100, 10));
                                     const tier = (data.premium && data.premium.tier) || 0;
                                     const starCls = tierStarColor(tier);
-                                    userHead.innerHTML = `${data.user.username} <i class=\"fa-solid fa-star ${starCls}\"></i>`;
+                                    const unlim = !!(data.premium && data.premium.unlimited_energy);
+                                    const badge = unlim ? ` <span class=\"ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded border border-cyan-200 text-xs bg-cyan-50 text-cyan-700\"><i class=\"fa-solid fa-gem text-cyan-500 text-[0.6rem]\"></i><span>Unlimited Energy</span></span>` : '';
+                                    userHead.innerHTML = `${data.user.username} <i class=\"fa-solid fa-star ${starCls}\"></i>${badge}`;
                                     setVals(data.stats);
+                                    // Disable energy slider if Unlimited Energy
+                                    if (sliders.energy) sliders.energy.disabled = !!unlim;
                                     status.textContent = '';
                                 } catch (e) {
                                     status.textContent = 'Failed to load user stats';
