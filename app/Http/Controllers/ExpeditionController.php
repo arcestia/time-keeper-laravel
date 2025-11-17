@@ -5,6 +5,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Carbon;
 use App\Models\Expedition;
 use App\Models\UserExpedition;
@@ -20,12 +21,38 @@ use App\Services\ProgressService;
 use App\Services\ExpeditionMasteryService;
 use App\Services\GuildLevelService;
 use Flasher\Laravel\Facade\Flasher;
+use App\Jobs\ClaimAllExpeditionsJob;
 
 class ExpeditionController extends Controller
 {
     public function page()
     {
         return view('expeditions.index');
+    }
+
+    public function claimAllStart(): JsonResponse
+    {
+        $user = Auth::user();
+        $limit = max(50, min(1000, (int) request('limit', 300)));
+        // reset progress cache
+        Cache::forget('claim_all_progress:'.$user->id);
+        dispatch(new ClaimAllExpeditionsJob($user->id, $limit));
+        return response()->json(['ok'=>true,'started'=>true,'limit'=>$limit]);
+    }
+
+    public function claimAllStatus(): JsonResponse
+    {
+        $user = Auth::user();
+        $state = Cache::get('claim_all_progress:'.$user->id);
+        if (!$state) {
+            // if no state and no remaining, return done
+            $remaining = UserExpedition::where(['user_id'=>$user->id,'status'=>'active'])
+                ->whereNotNull('ends_at')
+                ->where('ends_at','<=',now())
+                ->limit(1)->count();
+            return response()->json(['ok'=>true,'status'=> $remaining>0 ? 'idle' : 'done','claimed'=>0,'total_xp'=>0,'total_guild_xp'=>0,'loot'=>[],'remaining'=>$remaining]);
+        }
+        return response()->json(['ok'=>true] + $state);
     }
 
     public function startAllByLevel(Request $request): JsonResponse
@@ -90,17 +117,19 @@ class ExpeditionController extends Controller
         $user = Auth::user();
         $now = now();
         $claimed = 0; $totalXp = 0; $totalGuildXp = 0; $lootAgg = [];
-        // Process all finished active expeditions in batches; each batch handled in a single transaction
-        $batchSize = 500;
-        while (true) {
-            $toProcess = UserExpedition::where(['user_id'=>$user->id,'status'=>'active'])
-                ->whereNotNull('ends_at')
-                ->where('ends_at','<=',$now)
-                ->orderBy('id')
-                ->limit($batchSize)
-                ->get();
-            if ($toProcess->isEmpty()) { break; }
-            DB::transaction(function() use($user, $toProcess, $now, &$claimed, &$totalXp, &$totalGuildXp, &$lootAgg) {
+        // Iterative mode: process up to 'limit' rows per request to avoid timeouts
+        $limit = (int) request('limit', 200);
+        $limit = max(1, min(1000, $limit));
+        $toProcess = UserExpedition::where(['user_id'=>$user->id,'status'=>'active'])
+            ->whereNotNull('ends_at')
+            ->where('ends_at','<=',$now)
+            ->orderBy('id')
+            ->limit($limit)
+            ->get();
+        if ($toProcess->isEmpty()) {
+            return response()->json(['ok'=>true,'claimed'=>0,'total_xp'=>0,'total_guild_xp'=>0,'loot'=>[],'has_more'=>false,'remaining'=>0]);
+        }
+        DB::transaction(function() use($user, $toProcess, $now, &$claimed, &$totalXp, &$totalGuildXp, &$lootAgg) {
                 // lock all rows again inside the transaction and eager load expedition
                 $ids = $toProcess->pluck('id')->all();
                 $rows = UserExpedition::with('expedition')->whereIn('id', $ids)->lockForUpdate()->get();
@@ -120,6 +149,8 @@ class ExpeditionController extends Controller
                 $mastery = app(ExpeditionMasteryService::class)->getOrCreate($user->id);
                 $mBonuses = app(ExpeditionMasteryService::class)->bonusesForLevel((int)$mastery->level);
                 $mXpMult = (float)($mBonuses['xp_multiplier'] ?? 1.0);
+                // Preload active items once per batch to avoid per-row queries
+                $activeItems = StoreItem::where('is_active', true)->get()->values();
 
                 foreach ($rows as $ue) {
                     if ($ue->status !== 'active' || !$ue->ends_at || $now->lt($ue->ends_at)) { continue; }
@@ -172,11 +203,13 @@ class ExpeditionController extends Controller
                     $band = $cfg['level_qty_bands'][$level] ?? [1,2];
                     $qtyPerHour = (int) $cfg['qty_per_hour'];
                     $baseMin = (int) $band[0]; $baseMax = (int) $band[1];
-                    $items = StoreItem::where('is_active', true)->inRandomOrder()->limit(5)->get();
-                    $count = max(1, min(3, $level, $items->count()));
+                    // sample up to 5 items from preloaded list, then take count up to 3
+                    $count = max(1, min(3, $level, $activeItems->count()));
                     $loot = [];
                     for ($i=0; $i<$count; $i++) {
-                        $si = $items[$i]; if (!$si) break;
+                        // pick a random index each time to diversify loot without DB
+                        $idx = random_int(0, max(0, $activeItems->count()-1));
+                        $si = $activeItems[$idx] ?? null; if (!$si) break;
                         $roll = random_int($baseMin, $baseMax);
                         $qty = (int) min((int)$cfg['qty_max'], $roll + (int) floor($hours * $qtyPerHour));
                         if ($qty <= 0) continue;
@@ -227,8 +260,14 @@ class ExpeditionController extends Controller
                     $sto->save();
                 }
             });
-        }
-        return response()->json(['ok'=>true,'claimed'=>$claimed,'total_xp'=>$totalXp,'total_guild_xp'=>$totalGuildXp,'loot'=>array_values($lootAgg)]);
+        // Check if more remain for subsequent calls
+        $remaining = UserExpedition::where(['user_id'=>$user->id,'status'=>'active'])
+            ->whereNotNull('ends_at')
+            ->where('ends_at','<=',$now)
+            ->limit(1)
+            ->count();
+        $hasMore = $remaining > 0;
+        return response()->json(['ok'=>true,'claimed'=>$claimed,'total_xp'=>$totalXp,'total_guild_xp'=>$totalGuildXp,'loot'=>array_values($lootAgg),'has_more'=>$hasMore,'remaining'=>$remaining]);
     }
 
     public function catalog(): JsonResponse

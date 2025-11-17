@@ -632,18 +632,34 @@
             if (claimAllBtn){
                 claimAllBtn.addEventListener('click', async ()=>{
                     try{
-                        const res = await fetch('/api/expeditions/claim-all', { method:'POST', headers:{'Accept':'application/json','X-CSRF-TOKEN': csrf,'X-Requested-With':'XMLHttpRequest' } });
-                        if (!res.ok) { const e = await res.json().catch(()=>({})); const msg = e && e.message ? e.message : 'Failed to claim all'; throw new Error(msg); }
-                        const r = await res.json();
+                        claimAllBtn.disabled = true;
+                        const startRes = await fetch('/api/expeditions/claim-all-start?limit=300', { method:'POST', headers:{'Accept':'application/json','X-CSRF-TOKEN': csrf,'X-Requested-With':'XMLHttpRequest' } });
+                        if (!startRes.ok) { const e = await startRes.json().catch(()=>({})); const msg = e && e.message ? e.message : 'Failed to start claim-all'; throw new Error(msg); }
                         await ensureSwal();
-                        const loot = (r.loot||[]).map(x => `${x.name} x${x.qty}`).join(', ');
-                        const addGuild = Number(r.total_guild_xp||0);
-                        const textParts = [`+${r.total_xp} XP`];
-                        if (addGuild>0) textParts.push(`Guild +${addGuild} XP`);
-                        if (loot) textParts.push(`Loot: ${loot}`);
-                        Swal.fire({ icon:'success', title:`Claimed ${r.claimed} expeditions`, text: textParts.join(' • ') });
+                        Swal.fire({
+                            title: 'Claiming expeditions...','allowOutsideClick': false, didOpen: () => { Swal.showLoading(); }
+                        });
+                        let done=false, guard=0; let last = {claimed:0,total_xp:0,total_guild_xp:0,loot:{},remaining:0,status:'running'};
+                        while(!done && guard<600){
+                            await new Promise(s=>setTimeout(s,500));
+                            const st = await fetch('/api/expeditions/claim-all-status', { headers:{'Accept':'application/json'} });
+                            if (!st.ok) continue;
+                            const js = await st.json().catch(()=>null); if (!js || !js.ok) continue;
+                            last = js;
+                            if (js.status==='done' || js.status==='error') { done = true; break; }
+                            guard++;
+                        }
+                        Swal.close();
+                        await ensureSwal();
+                        if (last.status==='error') { throw new Error(last.error || 'Claim-all failed'); }
+                        const lootStr = Object.entries(last.loot||{}).map(([name,qty])=>`${name} x${qty}`).join(', ');
+                        const parts = [`+${last.total_xp||0} XP`];
+                        if ((last.total_guild_xp||0)>0) parts.push(`Guild +${last.total_guild_xp} XP`);
+                        if (lootStr) parts.push(`Loot: ${lootStr}`);
+                        Swal.fire({ icon:'success', title:`Claimed ${last.claimed||0} expeditions`, text: parts.join(' • ') });
                         await loadMy();
                     }catch(err){ await ensureSwal(); Swal.fire({icon:'error', title: (err && err.message) ? err.message : 'Failed to claim all'}); }
+                    finally { claimAllBtn.disabled = false; }
                 });
             }
 
