@@ -65,7 +65,7 @@ class TimeKeeperController extends Controller
         $totalStepsAll = (int) (\App\Models\UserDailyStat::query()->sum('steps_count'));
 
         // Time tokens in circulation (global totals by color)
-        $tokenTotals = ['red' => 0, 'blue' => 0, 'green' => 0, 'yellow' => 0, 'black' => 0];
+        $tokenTotals = ['red' => 0, 'blue' => 0, 'green' => 0, 'yellow' => 0, 'black' => 0, 'diamond' => 0];
         UserTimeToken::query()
             ->select('color', DB::raw('SUM(quantity) as qty'))
             ->groupBy('color')

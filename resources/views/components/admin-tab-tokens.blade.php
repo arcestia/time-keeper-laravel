@@ -27,6 +27,7 @@
                             <option value="green">Green</option>
                             <option value="yellow">Yellow</option>
                             <option value="black">Black</option>
+                            <option value="diamond">Diamond</option>
                         </select>
                     </div>
                     <div>

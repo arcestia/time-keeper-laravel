@@ -191,7 +191,32 @@
                     const js = await fetchJson('/api/token-shop/balances');
                     const b = js && js.balances ? js.balances : {};
                     const el = document.getElementById('ts-balances');
-                    el.textContent = 'Red ' + (b.red||0) + ' • Blue ' + (b.blue||0) + ' • Green ' + (b.green||0) + ' • Yellow ' + (b.yellow||0) + ' • Black ' + (b.black||0);
+                    el.innerHTML = `
+                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-red-50 text-red-700 border border-red-200">
+                            <i class="fa-solid fa-circle text-red-500 text-[0.6rem]"></i>
+                            <span>Red ${(b.red||0).toLocaleString()}</span>
+                        </span>
+                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 ml-1">
+                            <i class="fa-solid fa-circle text-blue-500 text-[0.6rem]"></i>
+                            <span>Blue ${(b.blue||0).toLocaleString()}</span>
+                        </span>
+                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-green-50 text-green-700 border border-green-200 ml-1">
+                            <i class="fa-solid fa-circle text-green-500 text-[0.6rem]"></i>
+                            <span>Green ${(b.green||0).toLocaleString()}</span>
+                        </span>
+                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 ml-1">
+                            <i class="fa-solid fa-circle text-yellow-400 text-[0.6rem]"></i>
+                            <span>Yellow ${(b.yellow||0).toLocaleString()}</span>
+                        </span>
+                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-gray-100 text-gray-800 border border-gray-200 ml-1">
+                            <i class="fa-solid fa-circle text-gray-800 text-[0.6rem]"></i>
+                            <span>Black ${(b.black||0).toLocaleString()}</span>
+                        </span>
+                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-cyan-50 text-cyan-700 border border-cyan-200 ml-1">
+                            <i class="fa-solid fa-gem text-cyan-500 text-[0.6rem]"></i>
+                            <span>Diamond ${(b.diamond||0).toLocaleString()}</span>
+                        </span>
+                    `;
                 } catch (e) {
                     const el = document.getElementById('ts-balances');
                     el.textContent = 'Unable to load balances';

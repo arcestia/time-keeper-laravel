@@ -24,6 +24,7 @@
                                         <option value="green">Green</option>
                                         <option value="yellow">Yellow</option>
                                         <option value="black">Black</option>
+                                        <option value="diamond">Diamond</option>
                                     </select>
                                 </div>
                                 <div class="flex items-center gap-2">
@@ -98,7 +99,20 @@
                                 const itemLabel = nm ? `${nm} (#${p.item_id})` : `Item #${p.item_id}`;
                                 if (t==='item_inventory') return `<div class="flex items-center justify-between border rounded px-2 py-1 text-sm">${itemLabel} × ${p.qty}<button data-id="${id}" class="rm px-2 py-1 text-xs border rounded">Remove</button></div>`;
                                 if (t==='item_storage') return `<div class="flex items-center justify-between border rounded px-2 py-1 text-sm">${itemLabel} × ${p.qty}<button data-id="${id}" class="rm px-2 py-1 text-xs border rounded">Remove</button></div>`;
-                                if (t==='time_token') return `<div class="flex items-center justify-between border rounded px-2 py-1 text-sm">Token ${p.color} × ${p.qty}<button data-id="${id}" class="rm px-2 py-1 text-xs border rounded">Remove</button></div>`;
+                                if (t==='time_token') {
+                                    const c = String(p.color||'').toLowerCase(); const q = parseInt(p.qty||0,10)||0;
+                                    const map = {
+                                        red:   {wrap:'bg-red-50 text-red-700 border-red-200',    icon:'fa-circle text-red-500'},
+                                        blue:  {wrap:'bg-blue-50 text-blue-700 border-blue-200',  icon:'fa-circle text-blue-500'},
+                                        green: {wrap:'bg-green-50 text-green-700 border-green-200',icon:'fa-circle text-green-500'},
+                                        yellow:{wrap:'bg-amber-50 text-amber-700 border-amber-200',icon:'fa-circle text-yellow-400'},
+                                        black: {wrap:'bg-gray-100 text-gray-800 border-gray-200', icon:'fa-circle text-gray-800'},
+                                        diamond:{wrap:'bg-cyan-50 text-cyan-700 border-cyan-200', icon:'fa-gem text-cyan-500'},
+                                    };
+                                    const m = map[c] || map.red; const label = c.charAt(0).toUpperCase()+c.slice(1);
+                                    const badge = `<span class=\"inline-flex items-center gap-1 px-2 py-0.5 rounded border ${m.wrap}\"><i class=\"fa-solid ${m.icon} text-[0.6rem]\"></i><span>${label} × ${q.toLocaleString()}</span></span>`;
+                                    return `<div class=\"flex items-center justify-between border rounded px-2 py-1 text-sm\">${badge}<button data-id=\"${id}\" class=\"rm px-2 py-1 text-xs border rounded\">Remove</button></div>`;
+                                }
                                 if (t==='time_balance') return `<div class="flex items-center justify-between border rounded px-2 py-1 text-sm">${p.source} → ${p.amount}<button data-id="${id}" class="rm px-2 py-1 text-xs border rounded">Remove</button></div>`;
                                 return `<div class="border rounded px-2 py-1 text-sm">Unknown</div>`;
                             }
@@ -245,7 +259,35 @@
                                 e.preventDefault();
                                 const modal = $('token-modal'); const balEl = $('tm-bal'); const colorEl=$('tm-color'); const qtyEl=$('tm-qty');
                                 if (!modal) return; modal.classList.remove('hidden'); balEl.textContent='Loading...'; qtyEl.value='';
-                                try { const res = await fetch('/api/trades/my-tokens',{headers:{'Accept':'application/json'}}); const d = await res.json(); const b=d.balances||{}; balEl.textContent = `Balances: Red ${b.red||0}, Blue ${b.blue||0}, Green ${b.green||0}, Yellow ${b.yellow||0}, Black ${b.black||0}`; }
+                                try { const res = await fetch('/api/trades/my-tokens',{headers:{'Accept':'application/json'}}); const d = await res.json(); const b=d.balances||{}; balEl.innerHTML = `
+                                    <div class="text-xs mb-1">Balances</div>
+                                    <div class="flex flex-wrap gap-1">
+                                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-red-50 text-red-700 border border-red-200">
+                                            <i class="fa-solid fa-circle text-red-500 text-[0.6rem]"></i>
+                                            <span>Red ${(b.red||0).toLocaleString()}</span>
+                                        </span>
+                                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
+                                            <i class="fa-solid fa-circle text-blue-500 text-[0.6rem]"></i>
+                                            <span>Blue ${(b.blue||0).toLocaleString()}</span>
+                                        </span>
+                                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-green-50 text-green-700 border border-green-200">
+                                            <i class="fa-solid fa-circle text-green-500 text-[0.6rem]"></i>
+                                            <span>Green ${(b.green||0).toLocaleString()}</span>
+                                        </span>
+                                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">
+                                            <i class="fa-solid fa-circle text-yellow-400 text-[0.6rem]"></i>
+                                            <span>Yellow ${(b.yellow||0).toLocaleString()}</span>
+                                        </span>
+                                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-gray-100 text-gray-800 border border-gray-200">
+                                            <i class="fa-solid fa-circle text-gray-800 text-[0.6rem]"></i>
+                                            <span>Black ${(b.black||0).toLocaleString()}</span>
+                                        </span>
+                                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-cyan-50 text-cyan-700 border border-cyan-200">
+                                            <i class="fa-solid fa-gem text-cyan-500 text-[0.6rem]"></i>
+                                            <span>Diamond ${(b.diamond||0).toLocaleString()}</span>
+                                        </span>
+                                    </div>
+                                `; }
                                 catch(_) { balEl.textContent='Unable to load balances'; }
                                 const addBtn = $('tm-add'); if (addBtn) addBtn.onclick = async ()=>{
                                     const c = colorEl.value; const q = parseInt(qtyEl.value||'0',10)||0; if (q>0){ await fetch(`/api/trades/${tradeId}/lines/add`, {method:'POST', headers:{'Accept':'application/json','Content-Type':'application/json','X-CSRF-TOKEN': document.querySelector('meta[name=\"csrf-token\"]').content}, body: JSON.stringify({type:'time_token', payload:{color:c, qty:q}})}); modal.classList.add('hidden'); load(); }

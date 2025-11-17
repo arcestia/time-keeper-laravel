@@ -205,7 +205,7 @@ class AdminController extends Controller
         $target = User::findOrFail($id);
 
         $data = $request->validate([
-            'color' => ['required', 'string', 'in:red,blue,green,yellow,black'],
+            'color' => ['required', 'string', 'in:red,blue,green,yellow,black,diamond'],
             'qty' => ['required', 'integer', 'min:1', 'max:1000000'],
         ]);
 

@@ -7,6 +7,7 @@ return [
         'green' => 31536000,      // 1 year (365 days)
         'yellow' => 315360000,    // 10 years (1 decade)
         'black' => 3153600000,    // 100 years (1 century)
+        // Note: 'diamond' intentionally has no time value (non-exchangeable)
     ],
     // Corresponding store item keys (for inventory/storage)
     'store_item_keys' => [
@@ -15,5 +16,6 @@ return [
         'green' => 'token.green',
         'yellow' => 'token.yellow',
         'black' => 'token.black',
+        'diamond' => 'token.diamond',
     ],
 ];

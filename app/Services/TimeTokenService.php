@@ -25,7 +25,7 @@ class TimeTokenService
     public function getBalances(int $userId): array
     {
         $rows = UserTimeToken::query()->where('user_id', $userId)->get(['color','quantity']);
-        $out = ['red'=>0,'blue'=>0,'green'=>0,'yellow'=>0,'black'=>0];
+        $out = ['red'=>0,'blue'=>0,'green'=>0,'yellow'=>0,'black'=>0,'diamond'=>0];
         foreach ($rows as $r) {
             $c = strtolower((string)$r->color);
             if (array_key_exists($c, $out)) { $out[$c] = (int)$r->quantity; }

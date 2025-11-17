@@ -154,7 +154,7 @@ class TradeController extends Controller
         if ($data['type'] === 'time_token') {
             $c = strtolower((string)($data['payload']['color'] ?? ''));
             $qty = (int)($data['payload']['qty'] ?? 0);
-            if (!in_array($c, ['red','blue','green','yellow','black'], true) || $qty < 1) return response()->json(['ok'=>false,'message'=>'Invalid token'],422);
+            if (!in_array($c, ['red','blue','green','yellow','black','diamond'], true) || $qty < 1) return response()->json(['ok'=>false,'message'=>'Invalid token'],422);
             $mergeKey = $c;
             foreach ($linesSameSide as $l) {
                 if ($l->type === 'time_token' && strtolower((string)($l->payload['color'] ?? '')) === $c) {
