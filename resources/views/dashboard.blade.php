@@ -192,11 +192,29 @@
                                     if (!r2.ok) throw new Error('failed');
                                     const s = await r2.json();
                                     const cap = Math.max(100, parseInt(s.cap_percent ?? 100, 10));
-                                    for (const k of ['energy','food','water','leisure','health']) {
+                                    const unlimited = !!s.unlimited_energy;
+                                    // Non-energy stats
+                                    for (const k of ['food','water','leisure','health']) {
                                         const val = Math.max(0, parseInt(s[k] ?? 0, 10));
                                         const pct = Math.max(0, Math.min(100, Math.round((val / cap) * 100)));
                                         if (bars[k]) bars[k].style.width = pct + '%';
                                         if (vals[k]) vals[k].textContent = val + '%';
+                                    }
+                                    // Energy handling
+                                    if (unlimited) {
+                                        if (bars.energy){
+                                            bars.energy.style.width = '100%';
+                                            bars.energy.className = 'h-2 bg-gradient-to-r from-cyan-400 to-cyan-600';
+                                        }
+                                        if (vals.energy) vals.energy.innerHTML = '100% <span class="ml-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-cyan-200 text-[10px] bg-cyan-50 text-cyan-700"><i class="fa-solid fa-gem text-cyan-500 text-[0.6rem]"></i><span>Unlimited</span></span>';
+                                    } else {
+                                        const valE = Math.max(0, parseInt(s.energy ?? 0, 10));
+                                        const pctE = Math.max(0, Math.min(100, Math.round((valE / cap) * 100)));
+                                        if (bars.energy){
+                                            bars.energy.style.width = pctE + '%';
+                                            bars.energy.className = 'h-2 bg-gradient-to-r from-amber-400 to-amber-600';
+                                        }
+                                        if (vals.energy) vals.energy.textContent = valE + '%';
                                     }
                                     statsStatusEl.textContent = '';
                                 } catch (e) {

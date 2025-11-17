@@ -30,6 +30,7 @@ class StatsController extends Controller
             'leisure' => (int)$stats->leisure,
             'health' => (int)$stats->health,
             'cap_percent' => (int)$cap,
+            'unlimited_energy' => (bool) \App\Services\PremiumService::unlimitedEnergyForUser($user->id),
         ]);
     }
 

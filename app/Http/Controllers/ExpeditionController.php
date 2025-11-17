@@ -100,17 +100,30 @@ class ExpeditionController extends Controller
                 $query->whereIn('expedition_id', function($q) use ($level){ $q->select('id')->from('expeditions')->where('level',$level); });
             }
             $toStart = $query->orderBy('id')->limit($remaining)->get();
+            // Energy gating: stop immediately if energy is 0 (unless Unlimited Energy)
+            $unlimited = \App\Services\PremiumService::unlimitedEnergyForUser($user->id);
+            $statsPreview = \App\Models\UserStats::where('user_id',$user->id)->first();
+            $energyRemaining = (int)($statsPreview->energy ?? 0);
+            if (!$unlimited && $energyRemaining <= 0) {
+                return response()->json(['ok'=>true,'started'=>0,'message'=>'Energy is 0']);
+            }
             $started = 0; $sumEnergyCost = 0;
             foreach ($toStart as $row) {
                 $ue = \App\Models\UserExpedition::where(['id'=>$row->id,'user_id'=>$user->id])->lockForUpdate()->first();
                 if (!$ue || $ue->status !== 'pending') { continue; }
+                // check per-expedition energy cost and stop if it would drop below 0 (unless Unlimited Energy)
+                $exp = \App\Models\Expedition::find($ue->expedition_id);
+                $costPct = (int)($exp->energy_cost_pct ?? 0);
+                if (!$unlimited) {
+                    if ($energyRemaining - $costPct < 0) { break; }
+                    $energyRemaining -= $costPct;
+                }
                 $ue->status = 'active';
                 $ue->started_at = $now;
                 $ue->ends_at = $now->copy()->addSeconds((int)$ue->duration_seconds);
                 $ue->save();
                 $started++;
                 // accumulate energy cost
-                $exp = \App\Models\Expedition::find($ue->expedition_id);
                 if ($exp) { $sumEnergyCost += (int)$exp->energy_cost_pct; }
             }
             // Deduct total energy like start()

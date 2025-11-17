@@ -36,6 +36,13 @@ class LifetimeUpgradeController extends Controller
             $up = UserLifetimeUpgrade::lockForUpdate()->firstOrCreate(['user_id'=>$uid], [
                 'stats_cap_steps'=>0,'extra_expedition_slots'=>0,'unlimited_energy'=>false
             ]);
+            // Prevent exceeding overall 20x stats cap
+            $p = \App\Services\PremiumService::getOrCreate($uid);
+            $tier = \App\Services\PremiumService::tierFor((int)$p->premium_seconds_accumulated);
+            $benefits = \App\Services\PremiumService::benefitsForTier($tier);
+            $baseMult = (float)($benefits['cap_multiplier'] ?? 1.0);
+            $currentMult = $baseMult + 0.5 * max(0, (int)$up->stats_cap_steps);
+            if ($currentMult >= 20.0 || ($currentMult + 0.5) > 20.0) { abort(422, 'Stats cap already at maximum'); }
             // cost: 1 diamond token (exact)
             $row = UserTimeToken::query()->where(['user_id'=>$uid,'color'=>'diamond'])->lockForUpdate()->first();
             $have = (int)($row->quantity ?? 0);
@@ -60,6 +67,8 @@ class LifetimeUpgradeController extends Controller
             $up = UserLifetimeUpgrade::lockForUpdate()->firstOrCreate(['user_id'=>$uid], [
                 'stats_cap_steps'=>0,'extra_expedition_slots'=>0,'unlimited_energy'=>false
             ]);
+            // Cap lifetime extra slots at 50
+            if ((int)$up->extra_expedition_slots >= 50) { abort(422, 'Lifetime expedition slots are at maximum'); }
             // cost: 1 diamond token (exact)
             $row = UserTimeToken::query()->where(['user_id'=>$uid,'color'=>'diamond'])->lockForUpdate()->first();
             $have = (int)($row->quantity ?? 0);
