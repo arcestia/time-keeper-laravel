@@ -661,17 +661,21 @@
                         if (guard>=600 && !done) {
                             // fallback: guard exceeded, show last known values to unblock UI
                             const lootStr = Object.entries(last.loot||{}).map(([name,qty])=>`${name} x${qty}`).join(', ');
+                            const autoStr = Object.entries(last.auto_used||{}).map(([name,qty])=>`${name} x${qty}`).join(', ');
                             const parts = [`+${last.total_xp||0} XP`];
                             if ((last.total_guild_xp||0)>0) parts.push(`Guild +${last.total_guild_xp} XP`);
                             if (lootStr) parts.push(`Loot: ${lootStr}`);
+                            if (autoStr) parts.push(`Auto-used: ${autoStr}`);
                             Swal.fire({ icon:'info', title:`Claiming timed out`, text: parts.join(' • ') });
                             await loadMy();
                             return;
                         }
                         const lootStr = Object.entries(last.loot||{}).map(([name,qty])=>`${name} x${qty}`).join(', ');
+                        const autoStr = Object.entries(last.auto_used||{}).map(([name,qty])=>`${name} x${qty}`).join(', ');
                         const parts = [`+${last.total_xp||0} XP`];
                         if ((last.total_guild_xp||0)>0) parts.push(`Guild +${last.total_guild_xp} XP`);
                         if (lootStr) parts.push(`Loot: ${lootStr}`);
+                        if (autoStr) parts.push(`Auto-used: ${autoStr}`);
                         Swal.fire({ icon:'success', title:`Claimed ${last.claimed||0} expeditions`, text: parts.join(' • ') });
                         await loadMy();
                     }catch(err){ await ensureSwal(); Swal.fire({icon:'error', title: (err && err.message) ? err.message : 'Failed to claim all'}); }

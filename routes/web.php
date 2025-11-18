@@ -100,6 +100,11 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/api/inventory/move-all-to-storage', [InventoryController::class, 'moveAllToStorage'])->name('inventory.move_all_to_storage');
     Route::post('/api/inventory/move-to-inventory', [InventoryController::class, 'moveToInventory'])->name('inventory.move_to_inventory');
 
+    // Auto-rations
+    Route::get('/api/inventory/auto-rations', [\App\Http\Controllers\InventoryController::class, 'autoRationsGet'])->name('inventory.auto_rations.get');
+    Route::patch('/api/inventory/auto-rations', [\App\Http\Controllers\InventoryController::class, 'autoRationsUpdate'])->name('inventory.auto_rations.update');
+    Route::post('/api/inventory/auto-rations/purchase', [\App\Http\Controllers\InventoryController::class, 'autoRationsPurchase'])->name('inventory.auto_rations.purchase');
+
     // Expeditions
     Route::get('/expeditions', [ExpeditionController::class, 'page'])->name('expeditions.page');
     Route::get('/api/expeditions', [ExpeditionController::class, 'catalog'])->name('expeditions.catalog');

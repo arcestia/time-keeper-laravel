@@ -11,12 +11,62 @@ use App\Models\UserStats;
 use App\Services\PremiumService;
 use App\Models\UserTimeWallet;
 use Carbon\CarbonImmutable;
+use App\Services\AutoRationsService;
+use App\Services\TimeTokenService as TTSvc;
 
 class InventoryController extends Controller
 {
     public function page()
     {
         return view('inventory.index');
+    }
+
+    // --- Auto-rations APIs ---
+    public function autoRationsGet(): JsonResponse
+    {
+        $userId = Auth::id();
+        $svc = app(AutoRationsService::class);
+        $row = $svc->getOrCreate($userId);
+        return response()->json([
+            'food_enabled' => (bool)$row->food_enabled,
+            'water_enabled' => (bool)$row->water_enabled,
+            'food_threshold' => (int)$row->food_threshold,
+            'water_threshold' => (int)$row->water_threshold,
+            'access_until' => $row->access_until ? $row->access_until->toIso8601String() : null,
+            'has_access' => $svc->hasAccess($userId),
+            'food_item_keys' => is_array($row->food_item_keys) ? array_values($row->food_item_keys) : [],
+            'water_item_keys' => is_array($row->water_item_keys) ? array_values($row->water_item_keys) : [],
+        ]);
+    }
+
+    public function autoRationsUpdate(): JsonResponse
+    {
+        $userId = Auth::id();
+        $data = request()->validate([
+            'food_enabled' => 'sometimes|boolean',
+            'water_enabled' => 'sometimes|boolean',
+            'food_threshold' => 'sometimes|integer|min:1|max:20000',
+            'water_threshold' => 'sometimes|integer|min:1|max:20000',
+            'food_item_keys' => 'sometimes|array',
+            'food_item_keys.*' => 'string',
+            'water_item_keys' => 'sometimes|array',
+            'water_item_keys.*' => 'string',
+        ]);
+        $row = app(AutoRationsService::class)->getOrCreate($userId);
+        foreach ($data as $k=>$v) { $row->{$k} = $v; }
+        $row->save();
+        return response()->json(['ok'=>true]);
+    }
+
+    public function autoRationsPurchase(TTSvc $tokens): JsonResponse
+    {
+        $userId = Auth::id();
+        $color = (string) request('color');
+        $qty = max(1, (int) request('qty', 1));
+        $svc = app(AutoRationsService::class);
+        $res = $svc->purchaseAccess($userId, $color, $qty, $tokens);
+        if (!($res['ok'] ?? false)) { return response()->json(['ok'=>false,'message'=>$res['message'] ?? 'Failed'], 422); }
+        return response()->json($res);
     }
 
     public function list(): JsonResponse
@@ -103,9 +153,8 @@ class InventoryController extends Controller
 
             $stats = UserStats::where('user_id',$userId)->lockForUpdate()->first();
             if (!$stats) { $stats = UserStats::create(['user_id'=>$userId, 'energy'=>100,'food'=>100,'water'=>100,'leisure'=>100,'health'=>100]); }
-            $prem = PremiumService::getOrCreate($userId);
-            $capMult = 1.0; if (PremiumService::isActive($prem)) { $tier = PremiumService::tierFor((int)$prem->premium_seconds_accumulated); $benefits = PremiumService::benefitsForTier($tier); $capMult = (float)($benefits['cap_multiplier']??1.0); }
-            $cap = (int) floor(100 * $capMult);
+            // Include lifetime upgrade steps in cap via PremiumService helper
+            $cap = (int) PremiumService::statsCapPercentForUser($userId);
 
             // Compute the maximum items we can consume without overflowing any stat
             $needFood = max(0, $cap - (int)$stats->food);

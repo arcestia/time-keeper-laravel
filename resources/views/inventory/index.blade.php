@@ -23,8 +23,15 @@
                         <div class="flex items-center gap-3 flex-wrap">
                             <button id="tab-inv" class="px-3 py-2 text-sm font-medium border-b-2 border-indigo-600 text-indigo-700">Inventory (0)</button>
                             <button id="tab-sto" class="px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-800">Storage (0)</button>
+                            <button id="tab-prefs" class="px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-800">Preferences</button>
                             <div class="ml-auto flex items-center gap-2">
                                 <input id="inv-search" type="text" placeholder="Search items" class="border rounded px-2 py-1 text-sm" />
+                                <select id="inv-filter" class="border rounded px-2 py-1 text-sm">
+                                    <option value="all">All</option>
+                                    <option value="food">Food</option>
+                                    <option value="water">Water</option>
+                                    <option value="energy">Energy</option>
+                                </select>
                                 <select id="inv-sort" class="border rounded px-2 py-1 text-sm">
                                     <option value="name">Name</option>
                                     <option value="qty">Quantity</option>
@@ -38,6 +45,54 @@
                     <div class="mt-4">
                         <ul id="inv-list" class="divide-y"></ul>
                         <ul id="sto-list" class="divide-y hidden"></ul>
+                        <div id="prefs" class="hidden">
+                            <div class="text-sm text-gray-600 mb-2">Auto-rations</div>
+                            <div id="prefs-status" class="text-sm text-gray-500 mb-2"></div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div class="p-3 border rounded">
+                                    <div class="flex items-center gap-2">
+                                        <input id="ar-food-enabled" type="checkbox" class="h-4 w-4">
+                                        <label for="ar-food-enabled" class="text-sm font-medium">Auto Food</label>
+                                    </div>
+                                    <div class="mt-2">
+                                        <label class="text-xs text-gray-600">Threshold (%)</label>
+                                        <input id="ar-food-th" type="number" min="1" max="20000" value="50" class="mt-1 border rounded px-2 py-1 text-sm w-32">
+                                    </div>
+                                    <div class="mt-3">
+                                        <div class="text-xs text-gray-600 mb-1">Preferred Food Items</div>
+                                        <div id="ar-food-list" class="max-h-40 overflow-auto space-y-1 text-xs"></div>
+                                    </div>
+                                </div>
+                                <div class="p-3 border rounded">
+                                    <div class="flex items-center gap-2">
+                                        <input id="ar-water-enabled" type="checkbox" class="h-4 w-4">
+                                        <label for="ar-water-enabled" class="text-sm font-medium">Auto Water</label>
+                                    </div>
+                                    <div class="mt-2">
+                                        <label class="text-xs text-gray-600">Threshold (%)</label>
+                                        <input id="ar-water-th" type="number" min="1" max="20000" value="50" class="mt-1 border rounded px-2 py-1 text-sm w-32">
+                                    </div>
+                                    <div class="mt-3">
+                                        <div class="text-xs text-gray-600 mb-1">Preferred Water Items</div>
+                                        <div id="ar-water-list" class="max-h-40 overflow-auto space-y-1 text-xs"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mt-3 flex items-center gap-2">
+                                <button id="ar-save" class="px-3 py-2 border rounded text-sm">Save</button>
+                                <span id="ar-access" class="text-sm text-gray-700"></span>
+                            </div>
+                            <div class="mt-4">
+                                <div class="text-sm text-gray-600 mb-1">Purchase Access Time (accumulates)</div>
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <button data-color="red" class="ar-buy px-2 py-1 rounded border">+1 Red (6h)</button>
+                                    <button data-color="blue" class="ar-buy px-2 py-1 rounded border">+1 Blue</button>
+                                    <button data-color="green" class="ar-buy px-2 py-1 rounded border">+1 Green</button>
+                                    <button data-color="yellow" class="ar-buy px-2 py-1 rounded border">+1 Yellow</button>
+                                    <button data-color="black" class="ar-buy px-2 py-1 rounded border">+1 Black</button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     <div id="inv-status" class="mt-3 text-sm text-gray-500"></div>
                 </div>
@@ -54,8 +109,20 @@
             const invMeta = document.getElementById('inv-meta');
             const tabInv = document.getElementById('tab-inv');
             const tabSto = document.getElementById('tab-sto');
+            const tabPrefs = document.getElementById('tab-prefs');
             const searchBox = document.getElementById('inv-search');
             const sortSel = document.getElementById('inv-sort');
+            const filtSel = document.getElementById('inv-filter');
+            const prefsPanel = document.getElementById('prefs');
+            const prefsStatus = document.getElementById('prefs-status');
+            const arFood = document.getElementById('ar-food-enabled');
+            const arWater = document.getElementById('ar-water-enabled');
+            const arFoodTh = document.getElementById('ar-food-th');
+            const arWaterTh = document.getElementById('ar-water-th');
+            const arSave = document.getElementById('ar-save');
+            const arAccess = document.getElementById('ar-access');
+            const arFoodList = document.getElementById('ar-food-list');
+            const arWaterList = document.getElementById('ar-water-list');
             document.getElementById('inv-refresh').addEventListener('click', load);
             document.getElementById('inv-move-all').addEventListener('click', async () => {
                 try {
@@ -87,19 +154,36 @@
                     tabInv.classList.remove('text-gray-600');
                     tabSto.classList.remove('border-b-2','border-indigo-600','text-indigo-700');
                     tabSto.classList.add('text-gray-600');
+                    tabPrefs.classList.remove('border-b-2','border-indigo-600','text-indigo-700');
+                    tabPrefs.classList.add('text-gray-600');
                     invList.classList.remove('hidden');
                     stoList.classList.add('hidden');
+                    prefsPanel.classList.add('hidden');
                 } else {
-                    tabSto.classList.add('border-b-2','border-indigo-600','text-indigo-700');
-                    tabSto.classList.remove('text-gray-600');
                     tabInv.classList.remove('border-b-2','border-indigo-600','text-indigo-700');
                     tabInv.classList.add('text-gray-600');
-                    stoList.classList.remove('hidden');
-                    invList.classList.add('hidden');
+                    if (t === 'sto') {
+                        tabSto.classList.add('border-b-2','border-indigo-600','text-indigo-700');
+                        tabSto.classList.remove('text-gray-600');
+                        tabPrefs.classList.remove('border-b-2','border-indigo-600','text-indigo-700');
+                        tabPrefs.classList.add('text-gray-600');
+                        stoList.classList.remove('hidden');
+                        invList.classList.add('hidden');
+                        prefsPanel.classList.add('hidden');
+                    } else {
+                        tabPrefs.classList.add('border-b-2','border-indigo-600','text-indigo-700');
+                        tabPrefs.classList.remove('text-gray-600');
+                        tabSto.classList.remove('border-b-2','border-indigo-600','text-indigo-700');
+                        tabSto.classList.add('text-gray-600');
+                        invList.classList.add('hidden');
+                        stoList.classList.add('hidden');
+                        prefsPanel.classList.remove('hidden');
+                    }
                 }
             }
             tabInv.addEventListener('click', () => setTab('inv'));
             tabSto.addEventListener('click', () => setTab('sto'));
+            tabPrefs.addEventListener('click', () => { setTab('prefs'); loadAuto(); });
 
             function row(entry, side) {
                 const li = document.createElement('li');
@@ -255,6 +339,18 @@
                     const d = (e?.item?.description||'').toLowerCase();
                     return n.includes(q) || t.includes(q) || d.includes(q);
                 });
+                const fv = (filtSel && filtSel.value) || 'all';
+                if (fv !== 'all') {
+                    out = out.filter(e => {
+                        const rf = Number(e?.item?.restore_food||0);
+                        const rw = Number(e?.item?.restore_water||0);
+                        const re = Number(e?.item?.restore_energy||0);
+                        if (fv === 'food') return rf > 0;
+                        if (fv === 'water') return rw > 0;
+                        if (fv === 'energy') return re > 0;
+                        return true;
+                    });
+                }
                 const by = sortSel.value || 'name';
                 out = out.slice().sort((a,b) => {
                     if (by === 'qty') return (parseInt(b.quantity,10)||0) - (parseInt(a.quantity,10)||0);
@@ -298,6 +394,117 @@
                     status.textContent = 'Unable to load inventory';
                 }
             }
+            function renderPrefLists(foodKeys = [], waterKeys = []){
+                // Build from current inventory items only (exclude storage)
+                const entries = Array.isArray(dataInv) ? dataInv : [];
+                const qtyMap = Object.fromEntries(entries.map(e => [String(e?.item?.key||''), Number(e?.quantity||0)]));
+                const items = entries.map(e => e.item).filter(Boolean);
+                const foodItems = items.filter(i => Number(i.restore_food||0) > 0).sort((a,b)=>Number(a.restore_food||0)-Number(b.restore_food||0));
+                const waterItems = items.filter(i => Number(i.restore_water||0) > 0).sort((a,b)=>Number(a.restore_water||0)-Number(b.restore_water||0));
+                if (arFoodList) {
+                    arFoodList.innerHTML = '';
+                    foodItems.forEach(i => {
+                        const id = 'chk-food-'+i.key;
+                        const wrap = document.createElement('label');
+                        wrap.className = 'flex items-center gap-2';
+                        const cb = document.createElement('input');
+                        cb.type = 'checkbox'; cb.id = id; cb.value = i.key; cb.className = 'h-3 w-3';
+                        if (foodKeys.includes(String(i.key))) cb.checked = true;
+                        const span = document.createElement('span');
+                        const qty = qtyMap[String(i.key)] ?? 0;
+                        span.textContent = `${i.name} (+${Number(i.restore_food||0)} Food) • x${qty}`;
+                        wrap.appendChild(cb); wrap.appendChild(span); arFoodList.appendChild(wrap);
+                    });
+                }
+                if (arWaterList) {
+                    arWaterList.innerHTML = '';
+                    waterItems.forEach(i => {
+                        const id = 'chk-water-'+i.key;
+                        const wrap = document.createElement('label');
+                        wrap.className = 'flex items-center gap-2';
+                        const cb = document.createElement('input');
+                        cb.type = 'checkbox'; cb.id = id; cb.value = i.key; cb.className = 'h-3 w-3';
+                        if (waterKeys.includes(String(i.key))) cb.checked = true;
+                        const span = document.createElement('span');
+                        const qty = qtyMap[String(i.key)] ?? 0;
+                        span.textContent = `${i.name} (+${Number(i.restore_water||0)} Water) • x${qty}`;
+                        wrap.appendChild(cb); wrap.appendChild(span); arWaterList.appendChild(wrap);
+                    });
+                }
+            }
+
+            async function loadAuto() {
+                try {
+                    prefsStatus.textContent = 'Loading...';
+                    const r = await fetch('/api/inventory/auto-rations', { headers: { 'Accept':'application/json' } });
+                    if (!r.ok) throw new Error();
+                    const a = await r.json();
+                    arFood.checked = !!a.food_enabled; arWater.checked = !!a.water_enabled;
+                    arFoodTh.value = parseInt(a.food_threshold||50,10); arWaterTh.value = parseInt(a.water_threshold||50,10);
+                    renderPrefLists(Array.isArray(a.food_item_keys)?a.food_item_keys:[], Array.isArray(a.water_item_keys)?a.water_item_keys:[]);
+                    if (a.has_access) {
+                        const until = a.access_until ? new Date(a.access_until) : null;
+                        arAccess.textContent = until ? `Access active until ${until.toLocaleString()}` : 'Access active';
+                        arAccess.className = 'text-sm text-emerald-700';
+                    } else {
+                        arAccess.textContent = 'Access inactive';
+                        arAccess.className = 'text-sm text-rose-700';
+                    }
+                    prefsStatus.textContent = '';
+                } catch (e) {
+                    prefsStatus.textContent = 'Unable to load preferences';
+                }
+            }
+            async function saveAuto() {
+                try {
+                    prefsStatus.textContent = 'Saving...';
+                    const selFood = Array.from(arFoodList?.querySelectorAll('input[type="checkbox"]:checked')||[]).map(x=>x.value);
+                    const selWater = Array.from(arWaterList?.querySelectorAll('input[type="checkbox"]:checked')||[]).map(x=>x.value);
+                    const r = await fetch('/api/inventory/auto-rations', {
+                        method: 'PATCH',
+                        headers: { 'Accept':'application/json','Content-Type':'application/json','X-Requested-With':'XMLHttpRequest','X-CSRF-TOKEN': csrf },
+                        body: JSON.stringify({
+                            food_enabled: !!arFood.checked,
+                            water_enabled: !!arWater.checked,
+                            food_threshold: Math.max(1, parseInt(arFoodTh.value,10)||50),
+                            water_threshold: Math.max(1, parseInt(arWaterTh.value,10)||50),
+                            food_item_keys: selFood,
+                            water_item_keys: selWater,
+                        })
+                    });
+                    if (!r.ok) throw new Error();
+                    prefsStatus.textContent = 'Saved';
+                } catch (e) {
+                    prefsStatus.textContent = 'Failed to save';
+                }
+            }
+            if (arSave) arSave.addEventListener('click', saveAuto);
+            document.querySelectorAll('.ar-buy').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const color = btn.getAttribute('data-color');
+                    try {
+                        prefsStatus.textContent = 'Purchasing...';
+                        const r = await fetch('/api/inventory/auto-rations/purchase', {
+                            method: 'POST',
+                            headers: { 'Accept':'application/json','Content-Type':'application/json','X-Requested-With':'XMLHttpRequest','X-CSRF-TOKEN': csrf },
+                            body: JSON.stringify({ color, qty: 1 })
+                        });
+                        const d = await r.json().catch(()=>({}));
+                        if (!r.ok) {
+                            const msg = d && (d.message||d.error) ? String(d.message||d.error) : 'Purchase failed';
+                            prefsStatus.textContent = msg; return;
+                        }
+                        prefsStatus.textContent = 'Purchased access time';
+                        await loadAuto();
+                    } catch (e) {
+                        prefsStatus.textContent = 'Purchase failed';
+                    }
+                });
+            });
+            // trigger re-render on inputs
+            if (searchBox) searchBox.addEventListener('input', render);
+            if (sortSel) sortSel.addEventListener('change', render);
+            if (filtSel) filtSel.addEventListener('change', render);
             searchBox.addEventListener('input', render);
             sortSel.addEventListener('change', render);
 

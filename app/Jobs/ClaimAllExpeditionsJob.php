@@ -18,6 +18,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Cache;
+use App\Services\AutoRationsService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Carbon;
@@ -46,6 +47,7 @@ class ClaimAllExpeditionsJob implements ShouldQueue
             'total_xp' => 0,
             'total_guild_xp' => 0,
             'loot' => [],
+            'auto_used' => [],
             'remaining' => 0,
             'updated_at' => now()->toIso8601String(),
         ];
@@ -191,6 +193,31 @@ class ClaimAllExpeditionsJob implements ShouldQueue
                         $stats->food = max(0, (int)$stats->food - (int)$sumFood);
                         $stats->water = max(0, (int)$stats->water - (int)$sumWater);
                         $stats->save();
+                        // Auto-rations: attempt to top up food/water if below thresholds and access is active
+                        try {
+                            $used = app(AutoRationsService::class)->maybeTopUp($this->userId, ['food','water']);
+                            if (is_array($used) && ($used['ok'] ?? false)) {
+                                // Aggregate by key
+                                $agg = [];
+                                $usedArr = is_array($used['used'] ?? null) ? $used['used'] : [];
+                                foreach (['food','water'] as $k) {
+                                    $arr = is_array($usedArr[$k] ?? null) ? $usedArr[$k] : [];
+                                    foreach ($arr as $u) {
+                                        $key = (string)($u['key'] ?? ''); $cnt = (int)($u['used'] ?? 0);
+                                        if ($key && $cnt>0) { $agg[$key] = ($agg[$key] ?? 0) + $cnt; }
+                                    }
+                                }
+                                if (!empty($agg)) {
+                                    $names = \App\Models\StoreItem::whereIn('key', array_keys($agg))->get()->pluck('name','key');
+                                    foreach ($agg as $k=>$v) {
+                                        $nm = (string) ($names[$k] ?? $k);
+                                        $state['auto_used'][$nm] = ($state['auto_used'][$nm] ?? 0) + (int)$v;
+                                    }
+                                }
+                            }
+                        } catch (\Throwable $e) {
+                            \Log::warning('Auto-rations aggregation failed', ['user_id'=>$this->userId, 'error'=>$e->getMessage()]);
+                        }
                     }
 
                     foreach ($lootMap as $itemId => $info) {
