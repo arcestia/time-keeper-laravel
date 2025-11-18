@@ -11,6 +11,7 @@ class UserExpeditionUpgrade extends Model
     protected $fillable = [
         'user_id',
         'permanent_slots',
+        'admin_permanent_slots',
         'temp_slots',
         'temp_expires_at',
     ];
@@ -18,6 +19,7 @@ class UserExpeditionUpgrade extends Model
     protected $casts = [
         'user_id' => 'integer',
         'permanent_slots' => 'integer',
+        'admin_permanent_slots' => 'integer',
         'temp_slots' => 'integer',
         'temp_expires_at' => 'datetime',
     ];

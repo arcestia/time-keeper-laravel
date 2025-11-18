@@ -22,7 +22,7 @@
 
                         <div class="border rounded p-4">
                             <div class="font-semibold mb-1">Expedition Slots</div>
-                            <div class="text-sm text-gray-600 mb-2">Permanent +1 expedition slot per upgrade (max total 50).</div>
+                            <div class="text-sm text-gray-600 mb-2">Permanent +1 expedition slot per upgrade (max total 250).</div>
                             <div class="text-sm mb-3">Lifetime extra slots: <span id="lt-slots">0</span></div>
                             <button id="btn-slot" class="px-3 py-2 rounded bg-indigo-600 text-white">Buy (+1 slot) — 1 Diamond</button>
                         </div>

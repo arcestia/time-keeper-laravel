@@ -57,6 +57,8 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/admin/users', [\App\Http\Controllers\AdminController::class, 'usersSearch'])->name('admin.users.search');
     Route::get('/admin/users/{id}/stats', [\App\Http\Controllers\AdminController::class, 'getUserStats'])->name('admin.users.stats');
     Route::patch('/admin/users/{id}/stats', [\App\Http\Controllers\AdminController::class, 'updateUserStats'])->name('admin.users.stats.update');
+    Route::get('/admin/users/{id}/expedition-slots', [\App\Http\Controllers\AdminController::class, 'getUserExpeditionSlots'])->name('admin.users.expedition_slots');
+    Route::post('/admin/users/{id}/expedition-slots/admin', [\App\Http\Controllers\AdminController::class, 'setUserAdminExpeditionSlots'])->name('admin.users.expedition_slots.admin');
     Route::post('/admin/users/{id}/tokens', [\App\Http\Controllers\AdminController::class, 'grantUserTokens'])->name('admin.users.tokens.grant');
     Route::post('/admin/jobs', [\App\Http\Controllers\AdminController::class, 'createJob'])->name('admin.jobs.create');
     Route::get('/admin/store/items', [\App\Http\Controllers\AdminController::class, 'storeItems'])->name('admin.store.items');

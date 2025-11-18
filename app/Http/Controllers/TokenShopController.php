@@ -358,17 +358,21 @@ class TokenShopController extends Controller
         $now = now();
         $upgrade = UserExpeditionUpgrade::query()->where('user_id', $user->id)->first();
         $perm = (int)($upgrade->permanent_slots ?? 0);
+        $adm = (int)($upgrade->admin_permanent_slots ?? 0);
         $temp = 0; $expires = null;
         if ($upgrade && $upgrade->temp_expires_at && $upgrade->temp_expires_at->gt($now)) {
             $temp = (int)($upgrade->temp_slots ?? 0);
             $expires = $upgrade->temp_expires_at;
         }
+        $lifetime = (int) \App\Services\PremiumService::lifetimeExtraSlotsForUser($user->id);
         return response()->json([
             'ok' => true,
             'permanent' => $perm,
+            'admin_permanent' => $adm,
             'temp_active' => $temp,
             'temp_expires_at' => $expires,
-            'total_extra' => max(0, $perm + $temp),
+            'total_extra' => max(0, $perm + $adm + $temp),
+            'lifetime_extra' => $lifetime,
         ]);
     }
 

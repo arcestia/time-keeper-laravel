@@ -80,7 +80,7 @@ class ExpeditionController extends Controller
             $allowed += (int) \App\Services\PremiumService::lifetimeExtraSlotsForUser($user->id);
             $upgrade = \App\Models\UserExpeditionUpgrade::query()->where('user_id',$user->id)->first();
             if ($upgrade) {
-                $extraPerm = (int)$upgrade->permanent_slots;
+                $extraPerm = (int)$upgrade->permanent_slots + (int)($upgrade->admin_permanent_slots ?? 0);
                 $extraTemp = 0;
                 if ($upgrade->temp_expires_at && $upgrade->temp_expires_at->gt($now)) {
                     $extraTemp = (int)$upgrade->temp_slots;
@@ -477,12 +477,12 @@ class ExpeditionController extends Controller
             $mBonuses = app(ExpeditionMasteryService::class)->bonusesForLevel((int)$mastery->level);
             $allowed = (int)$allowed + (int)($mBonuses['expedition_extra_slots'] ?? 0);
             $allowed += (int) PremiumService::lifetimeExtraSlotsForUser($user->id);
-            $allowed = min(50, (int)$allowed);
+            $allowed = min(250, (int)$allowed);
 
             // add token shop extra slots (permanent + active temporary)
             $upgrade = UserExpeditionUpgrade::query()->where('user_id', $user->id)->first();
             if ($upgrade) {
-                $extraPerm = (int)$upgrade->permanent_slots;
+                $extraPerm = (int)$upgrade->permanent_slots + (int)($upgrade->admin_permanent_slots ?? 0);
                 $extraTemp = 0;
                 if ($upgrade->temp_expires_at && $upgrade->temp_expires_at->gt($now)) {
                     $extraTemp = (int)$upgrade->temp_slots;

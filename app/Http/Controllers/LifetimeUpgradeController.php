@@ -67,8 +67,8 @@ class LifetimeUpgradeController extends Controller
             $up = UserLifetimeUpgrade::lockForUpdate()->firstOrCreate(['user_id'=>$uid], [
                 'stats_cap_steps'=>0,'extra_expedition_slots'=>0,'unlimited_energy'=>false
             ]);
-            // Cap lifetime extra slots at 50
-            if ((int)$up->extra_expedition_slots >= 50) { abort(422, 'Lifetime expedition slots are at maximum'); }
+            // Cap lifetime extra slots at 250
+            if ((int)$up->extra_expedition_slots >= 250) { abort(422, 'Lifetime expedition slots are at maximum'); }
             // cost: 1 diamond token (exact)
             $row = UserTimeToken::query()->where(['user_id'=>$uid,'color'=>'diamond'])->lockForUpdate()->first();
             $have = (int)($row->quantity ?? 0);

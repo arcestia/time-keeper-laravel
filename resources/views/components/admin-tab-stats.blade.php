@@ -42,6 +42,17 @@
                     <button id="adm-save" type="button" class="inline-flex items-center px-4 py-2 bg-green-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-green-500">Save</button>
                     <div id="adm-status" class="text-sm text-gray-500"></div>
                 </div>
+
+                <div class="mt-4 border-t pt-4">
+                    <div class="text-sm font-medium text-gray-700 mb-2">Admin Expedition Slots</div>
+                    <div class="flex items-center gap-2">
+                        <input id="adm-admin-slots" type="number" min="0" step="1" class="w-32 border rounded px-2 py-1 text-sm" placeholder="e.g. 10">
+                        <button id="adm-admin-slots-set" type="button" class="px-3 py-2 rounded bg-indigo-600 text-white text-xs font-semibold">Set Admin Slots</button>
+                        <div id="adm-admin-slots-status" class="text-sm text-gray-500"></div>
+                    </div>
+                    <div class="text-xs text-gray-500 mt-1">Sets an extra permanent expedition slot amount that only admins can grant. Included in slot limits and capped by global limits.</div>
+                    <div id="adm-admin-slots-info" class="mt-2 text-sm text-gray-700"></div>
+                </div>
             </form>
         </div>
     </div>

@@ -23,6 +23,7 @@
                         <span class="px-2 py-0.5 rounded bg-amber-50 text-amber-700">Extra Slots +{{ $mExtra }}</span>
                         <span id="exp-xp-boost" class="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 hidden"></span>
                         <span id="exp-slot-extra" class="px-2 py-0.5 rounded bg-sky-50 text-sky-700 hidden"></span>
+                        <span id="exp-admin-slot-extra" class="px-2 py-0.5 rounded bg-fuchsia-50 text-fuchsia-700 hidden"></span>
                     </div>
 
                     <div class="border-b mt-4">
@@ -174,16 +175,25 @@
                     const res = await fetch('/api/token-shop/slot-stats', { headers:{'Accept':'application/json'} });
                     if (!res.ok) throw new Error();
                     const js = await res.json();
-                    const el = document.getElementById('exp-slot-extra');
+                    const tokenEl = document.getElementById('exp-slot-extra');
+                    const adminEl = document.getElementById('exp-admin-slot-extra');
                     const perm = Number(js.permanent||0);
                     const temp = Number(js.temp_active||0);
                     const total = Number(js.total_extra||0);
+                    const admin = Number(js.admin_permanent||0);
                     if (total>0){
-                        el.textContent = `Token Slots +${total}`;
-                        el.classList.remove('hidden');
+                        tokenEl.textContent = `Token Slots +${total}`;
+                        tokenEl.classList.remove('hidden');
                     } else {
-                        el.textContent = '';
-                        el.classList.add('hidden');
+                        tokenEl.textContent = '';
+                        tokenEl.classList.add('hidden');
+                    }
+                    if (admin>0){
+                        adminEl.textContent = `Event Admin Slots +${admin}`;
+                        adminEl.classList.remove('hidden');
+                    } else {
+                        adminEl.textContent = '';
+                        adminEl.classList.add('hidden');
                     }
                 }catch(e){}
             }

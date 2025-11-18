@@ -52,11 +52,11 @@
                                     }
                                 }
                                 if (name === 'store') {
-                                    if (typeof loadAdminStore === 'function') { loadAdminStore(); }
-                                    if (typeof loadStoreBalance === 'function') { loadStoreBalance(); }
-                                    if (!sbTimer && typeof loadStoreBalance === 'function') { sbTimer = setInterval(loadStoreBalance, 10000); }
+                                    setTimeout(() => { if (typeof loadAdminStore === 'function') { loadAdminStore(); } }, 0);
+                                    setTimeout(() => { if (typeof loadStoreBalance === 'function') { loadStoreBalance(); } }, 0);
+                                    if (!sbTimer) { sbTimer = setInterval(() => { if (typeof loadStoreBalance === 'function') loadStoreBalance(); }, 10000); }
                                 } else if (name === 'guilds') {
-                                    if (typeof loadAdminGuilds === 'function') { loadAdminGuilds(); }
+                                    setTimeout(() => { if (typeof loadAdminGuilds === 'function') { loadAdminGuilds(); } }, 0);
                                 } else {
                                     if (sbTimer) { clearInterval(sbTimer); sbTimer = null; }
                                 }
@@ -82,6 +82,11 @@
                             const userInfo = document.getElementById('adm-user');
                             const userHead = document.getElementById('adm-user-head');
                             const status = document.getElementById('adm-status');
+                            const slotsInfo = document.getElementById('adm-admin-slots-info');
+                            // Admin expedition slots controls
+                            const admSlotsInput = document.getElementById('adm-admin-slots');
+                            const admSlotsBtn = document.getElementById('adm-admin-slots-set');
+                            const admSlotsStatus = document.getElementById('adm-admin-slots-status');
                             // Tokens tab elements
                             const tokQ = document.getElementById('tok-q');
                             const tokSearchBtn = document.getElementById('tok-search');
@@ -205,6 +210,15 @@
                                     // Disable energy slider if Unlimited Energy
                                     if (sliders.energy) sliders.energy.disabled = !!unlim;
                                     status.textContent = '';
+                                    // Load current expedition slots for this user
+                                    try {
+                                        const sres = await fetch('/admin/users/' + currentUserId + '/expedition-slots', { headers: { 'Accept': 'application/json' } });
+                                        const sjs = await sres.json();
+                                        if (sres.ok && sjs && sjs.ok && slotsInfo) {
+                                            const exp = sjs.temp_expires_at ? new Date(sjs.temp_expires_at).toLocaleString() : null;
+                                            slotsInfo.textContent = `Admin: ${sjs.admin_permanent || 0} • Permanent: ${sjs.permanent || 0} • Temp Active: ${sjs.temp_active || 0}${exp ? ` (exp. ${exp})` : ''} • Total Extra: ${sjs.total_extra || 0}`;
+                                        }
+                                    } catch (_) {}
                                 } catch (e) {
                                     status.textContent = 'Failed to load user stats';
                                 }
@@ -300,6 +314,40 @@
                                 }
                             }
 
+                            // Admin-only expedition slots setter
+                            async function setAdminSlots(){
+                                if (!currentUserId) { if (admSlotsStatus) admSlotsStatus.textContent = 'Select a user first'; return; }
+                                const val = parseInt(admSlotsInput?.value || '0', 10) || 0;
+                                if (val < 0) { if (admSlotsStatus) admSlotsStatus.textContent = 'Slots must be >= 0'; return; }
+                                if (admSlotsStatus) admSlotsStatus.textContent = 'Updating...';
+                                try{
+                                    const res = await fetch(`/admin/users/${currentUserId}/expedition-slots/admin`, {
+                                        method: 'POST',
+                                        headers: {
+                                            'Accept': 'application/json',
+                                            'Content-Type': 'application/json',
+                                            'X-CSRF-TOKEN': csrf,
+                                            'X-XSRF-TOKEN': xsrf,
+                                            'X-Requested-With': 'XMLHttpRequest',
+                                        },
+                                        credentials: 'same-origin',
+                                        body: JSON.stringify({ slots: val }),
+                                    });
+                                    const data = await res.json().catch(()=>({}));
+                                    if (!res.ok || !data.ok){ throw new Error(data && data.message ? data.message : 'Failed'); }
+                                    if (admSlotsStatus) admSlotsStatus.textContent = `Set to ${data.admin_permanent ?? val} slot(s)`;
+                                    // refresh readout
+                                    try {
+                                        const sres = await fetch('/admin/users/' + currentUserId + '/expedition-slots', { headers: { 'Accept': 'application/json' } });
+                                        const sjs = await sres.json();
+                                        if (sres.ok && sjs && sjs.ok && slotsInfo) {
+                                            const exp = sjs.temp_expires_at ? new Date(sjs.temp_expires_at).toLocaleString() : null;
+                                            slotsInfo.textContent = `Admin: ${sjs.admin_permanent || 0} • Permanent: ${sjs.permanent || 0} • Temp Active: ${sjs.temp_active || 0}${exp ? ` (exp. ${exp})` : ''} • Total Extra: ${sjs.total_extra || 0}`;
+                                        }
+                                    } catch(_) {}
+                                }catch(e){ if (admSlotsStatus) admSlotsStatus.textContent = e.message || 'Failed'; }
+                            }
+
                             if (searchBtn) searchBtn.addEventListener('click', doSearch);
                             if (tokSearchBtn) tokSearchBtn.addEventListener('click', tokDoSearch);
                             const admSaveBtn = document.getElementById('adm-save');
@@ -307,6 +355,9 @@
                             const grantBtn = document.getElementById('tok-token-grant');
                             if (grantBtn) {
                                 grantBtn.addEventListener('click', grantTokens);
+                            }
+                            if (admSlotsBtn) {
+                                admSlotsBtn.addEventListener('click', setAdminSlots);
                             }
 
                             // Admin Store - moved after save() so it always registers

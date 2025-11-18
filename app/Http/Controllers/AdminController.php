@@ -26,6 +26,71 @@ class AdminController extends Controller
         return view('admin.index');
     }
 
+    public function getUserExpeditionSlots(int $id): JsonResponse
+    {
+        $user = Auth::user();
+        abort_unless($user && $user->is_admin, 403);
+        $u = \App\Models\User::findOrFail($id);
+        $up = \App\Models\UserExpeditionUpgrade::query()->where('user_id', $u->id)->first();
+        $now = now();
+        $perm = (int)($up->permanent_slots ?? 0);
+        $adm = (int)($up->admin_permanent_slots ?? 0);
+        $temp = 0; $expires = null;
+        if ($up && $up->temp_expires_at && $up->temp_expires_at->gt($now)) {
+            $temp = (int)($up->temp_slots ?? 0); $expires = $up->temp_expires_at;
+        }
+        return response()->json([
+            'ok' => true,
+            'permanent' => $perm,
+            'admin_permanent' => $adm,
+            'temp_active' => $temp,
+            'temp_expires_at' => $expires,
+            'total_extra' => max(0, $perm + $adm + $temp),
+        ]);
+    }
+
+    public function setUserAdminExpeditionSlots(Request $request, int $id): JsonResponse
+    {
+        $user = Auth::user();
+        abort_unless($user && $user->is_admin, 403);
+        $validated = validator($request->all(), [
+            'slots' => 'required|integer|min:0|max:10000',
+        ])->validate();
+
+        $result = DB::transaction(function () use ($id, $validated) {
+            $u = \App\Models\User::findOrFail($id);
+            $up = \App\Models\UserExpeditionUpgrade::query()->where('user_id', $u->id)->lockForUpdate()->first();
+            if (!$up) {
+                $up = \App\Models\UserExpeditionUpgrade::create([
+                    'user_id' => $u->id,
+                    'permanent_slots' => 0,
+                    'admin_permanent_slots' => 0,
+                    'temp_slots' => 0,
+                    'temp_expires_at' => null,
+                ]);
+            }
+            $up->admin_permanent_slots = (int)$validated['slots'];
+            $up->save();
+            $perm = (int)($up->permanent_slots ?? 0);
+            $adm = (int)($up->admin_permanent_slots ?? 0);
+            $temp = 0; $expires = null; $now = now();
+            if ($up->temp_expires_at && $up->temp_expires_at->gt($now)) {
+                $temp = (int)($up->temp_slots ?? 0); $expires = $up->temp_expires_at;
+            }
+            return [
+                'permanent' => $perm,
+                'admin_permanent' => $adm,
+                'temp_active' => $temp,
+                'temp_expires_at' => $expires,
+                'total_extra' => max(0, $perm + $adm + $temp),
+            ];
+        });
+
+        Flasher::addSuccess('Set admin expedition slots for user ID ' . $id);
+        session()->flash('success', 'Set admin expedition slots for user ID ' . $id);
+        return response()->json(['ok' => true] + $result);
+    }
+
     public function transferReserveToStore(Request $request): JsonResponse
     {
         $user = Auth::user();
