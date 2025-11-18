@@ -296,6 +296,7 @@
             }
 
             function fmtHMS(s){ s = parseInt(s,10)||0; const h=Math.floor(s/3600), m=Math.floor((s%3600)/60), sec=s%60; return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`; }
+            function fmtNum(n){ const v = Number(n||0); return isFinite(v) ? v.toLocaleString() : String(n); }
             function badge(text, bg, fg){ const b=document.createElement('span'); b.className=`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium ${bg} ${fg}`; b.textContent=text; return b; }
             function clamp01(x){ return Math.max(0, Math.min(1, x)); }
             function estXp(level, seconds, costSec=0, energyPct=0){
@@ -318,6 +319,12 @@
                 raw = Math.floor(raw * mult);
                 const vmin = EXP_CFG.variance_min || 0.9, vmax = Math.max(EXP_CFG.variance_max||1.2, vmin);
                 let lo = Math.floor(raw * vmin), hi = Math.ceil(raw * vmax);
+                // Apply global XP nerf before bonuses (mirrors backend)
+                const glob = Number(EXP_CFG.xp_global_multiplier ?? 1.0);
+                if (glob > 0 && glob !== 1.0) {
+                    lo = Math.max(1, Math.floor(lo * glob));
+                    hi = Math.max(lo, Math.ceil(hi * glob));
+                }
                 if (PREM && PREM.active && PREM.xp_multiplier && PREM.xp_multiplier > 1) {
                     lo = Math.max(1, Math.floor(lo * PREM.xp_multiplier));
                     hi = Math.max(lo, Math.ceil(hi * PREM.xp_multiplier));
@@ -347,7 +354,13 @@
                 const mult = Math.max(1.0, levMult * (1.0 + (Number(costSec)||0)*costW + (Number(energyPct)||0)*energyW + h*consW));
                 raw = Math.floor(raw * mult);
                 const vmin = EXP_CFG.variance_min || 0.9, vmax = Math.max(EXP_CFG.variance_max||1.2, vmin);
-                const lo = Math.floor(raw * vmin), hi = Math.ceil(raw * vmax);
+                let lo = Math.floor(raw * vmin), hi = Math.ceil(raw * vmax);
+                // Apply global XP nerf (base used for guild XP is after nerf, before bonuses)
+                const glob = Number(EXP_CFG.xp_global_multiplier ?? 1.0);
+                if (glob > 0 && glob !== 1.0) {
+                    lo = Math.max(1, Math.floor(lo * glob));
+                    hi = Math.max(lo, Math.ceil(hi * glob));
+                }
                 return [lo, hi];
             }
             function estTime(level, seconds, costSec=0, energyPct=0){
@@ -418,7 +431,7 @@
                     const qMin = estItemQty(currentLevel, e.min_duration_seconds);
                     const qMax = estItemQty(currentLevel, e.max_duration_seconds);
                     const gXp = guildXpFromXpRange(xpBaseMinMax[0], xpBaseMaxMax[1]);
-                    levelMeta.textContent = `Level ${currentLevel} • Duration: ${fmtHMS(e.min_duration_seconds)} - ${fmtHMS(e.max_duration_seconds)} • Cost: ${fmtHMS(e.cost_seconds)} • Energy: -${e.energy_cost_pct}% • Est. XP: ${xpMinMax[0]}–${xpMaxMax[1]} • Est. Time: ${tMinMax[0]}–${tMaxMax[1]} sec • Est. item qty per drop: ${qMin[0]}–${qMax[1]} • Est. guild XP (0.1% of base): ${gXp[0]}–${gXp[1]}`;
+                    levelMeta.textContent = `Level ${currentLevel} • Duration: ${fmtHMS(e.min_duration_seconds)} - ${fmtHMS(e.max_duration_seconds)} • Cost: ${fmtHMS(e.cost_seconds)} • Energy: -${e.energy_cost_pct}% • Est. XP: ${fmtNum(xpMinMax[0])}–${fmtNum(xpMaxMax[1])} • Est. Time: ${tMinMax[0]}–${tMaxMax[1]} sec • Est. item qty per drop: ${qMin[0]}–${qMax[1]} • Est. guild XP (0.1% of base): ${fmtNum(gXp[0])}–${fmtNum(gXp[1])}`;
                 }catch(e){ catStatus.textContent='Unable to load expeditions'; }
             }
 
@@ -469,7 +482,7 @@
                 badges.appendChild(dot);
                 badges.appendChild(lblXp);
                 const xpMM = estXp(lvl, r.duration_seconds||0, r.expedition?.cost_seconds||0, r.expedition?.energy_cost_pct||0);
-                badges.appendChild(badge(`${xpMM[0]}–${xpMM[1]}`,'bg-emerald-100','text-emerald-700'));
+                badges.appendChild(badge(`${fmtNum(xpMM[0])}–${fmtNum(xpMM[1])}`,'bg-emerald-100','text-emerald-700'));
                 badges.appendChild(dot.cloneNode(true));
                 badges.appendChild(lblTm);
                 const tmMM = estTime(lvl, r.duration_seconds||0, r.expedition?.cost_seconds||0, r.expedition?.energy_cost_pct||0);
@@ -478,7 +491,7 @@
                 const xpBaseMM = estXpBase(lvl, r.duration_seconds||0, r.expedition?.cost_seconds||0, r.expedition?.energy_cost_pct||0);
                 const gXp = guildXpFromXpRange(xpBaseMM[0], xpBaseMM[1]);
                 badges.appendChild(document.createTextNode('Guild XP (0.1% base)'));
-                badges.appendChild(badge(`${gXp[0]}–${gXp[1]}`,'bg-purple-100','text-purple-700'));
+                badges.appendChild(badge(`${fmtNum(gXp[0])}–${fmtNum(gXp[1])}`,'bg-purple-100','text-purple-700'));
                 return badges;
             }
 
@@ -660,23 +673,23 @@
                         if (last.status==='error') { throw new Error(last.error || 'Claim-all failed'); }
                         if (guard>=600 && !done) {
                             // fallback: guard exceeded, show last known values to unblock UI
-                            const lootStr = Object.entries(last.loot||{}).map(([name,qty])=>`${name} x${qty}`).join(', ');
-                            const autoStr = Object.entries(last.auto_used||{}).map(([name,qty])=>`${name} x${qty}`).join(', ');
-                            const parts = [`+${last.total_xp||0} XP`];
-                            if ((last.total_guild_xp||0)>0) parts.push(`Guild +${last.total_guild_xp} XP`);
+                            const lootStr = Object.entries(last.loot||{}).map(([name,qty])=>`${name} x${fmtNum(qty)}`).join(', ');
+                            const autoStr = Object.entries(last.auto_used||{}).map(([name,qty])=>`${name} x${fmtNum(qty)}`).join(', ');
+                            const parts = [`+${fmtNum(last.total_xp||0)} XP`];
+                            if ((last.total_guild_xp||0)>0) parts.push(`Guild +${fmtNum(last.total_guild_xp)} XP`);
                             if (lootStr) parts.push(`Loot: ${lootStr}`);
                             if (autoStr) parts.push(`Auto-used: ${autoStr}`);
                             Swal.fire({ icon:'info', title:`Claiming timed out`, text: parts.join(' • ') });
                             await loadMy();
                             return;
                         }
-                        const lootStr = Object.entries(last.loot||{}).map(([name,qty])=>`${name} x${qty}`).join(', ');
-                        const autoStr = Object.entries(last.auto_used||{}).map(([name,qty])=>`${name} x${qty}`).join(', ');
-                        const parts = [`+${last.total_xp||0} XP`];
-                        if ((last.total_guild_xp||0)>0) parts.push(`Guild +${last.total_guild_xp} XP`);
+                        const lootStr = Object.entries(last.loot||{}).map(([name,qty])=>`${name} x${fmtNum(qty)}`).join(', ');
+                        const autoStr = Object.entries(last.auto_used||{}).map(([name,qty])=>`${name} x${fmtNum(qty)}`).join(', ');
+                        const parts = [`+${fmtNum(last.total_xp||0)} XP`];
+                        if ((last.total_guild_xp||0)>0) parts.push(`Guild +${fmtNum(last.total_guild_xp)} XP`);
                         if (lootStr) parts.push(`Loot: ${lootStr}`);
                         if (autoStr) parts.push(`Auto-used: ${autoStr}`);
-                        Swal.fire({ icon:'success', title:`Claimed ${last.claimed||0} expeditions`, text: parts.join(' • ') });
+                        Swal.fire({ icon:'success', title:`Claimed ${fmtNum(last.claimed||0)} expeditions`, text: parts.join(' • ') });
                         await loadMy();
                     }catch(err){ await ensureSwal(); Swal.fire({icon:'error', title: (err && err.message) ? err.message : 'Failed to claim all'}); }
                     finally { claimAllBtn.disabled = false; }

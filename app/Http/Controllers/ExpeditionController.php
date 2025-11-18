@@ -550,6 +550,12 @@ class ExpeditionController extends Controller
             $xpVarMax = max((float)$cfg['variance_max'], $xpVar);
             $xp = (int) random_int((int) floor($xpRaw * $xpVar), (int) ceil($xpRaw * $xpVarMax));
             $xpBaseForGuild = $xp; // base XP before premium/mastery bonuses
+            // Apply global nerf before bonuses
+            $glob = (float) (config('expeditions.xp_global_multiplier') ?? 1.0);
+            if ($glob > 0.0 && $glob !== 1.0) {
+                $xp = max(1, (int) floor($xp * $glob));
+                $xpBaseForGuild = max(1, (int) floor($xpBaseForGuild * $glob));
+            }
             $prem = PremiumService::getOrCreate($user->id);
             if (PremiumService::isActive($prem)) {
                 $tier = PremiumService::tierFor((int)$prem->premium_seconds_accumulated);

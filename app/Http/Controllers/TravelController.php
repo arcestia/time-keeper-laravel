@@ -54,6 +54,17 @@ class TravelController extends Controller
             if ($xpMult > 1.0) { $baseXp = max(1, (int) floor($baseXp * $xpMult)); }
             if ($timeMult > 1.0) { $baseTimeSec = max(1, (int) floor($baseTimeSec * $timeMult)); }
         }
+        // Apply global XP nerf for travel (same as expeditions)
+        $glob = (float) (config('expeditions.xp_global_multiplier') ?? 1.0);
+        if ($glob > 0.0 && $glob !== 1.0) {
+            $baseXp = max(1, (int) floor($baseXp * $glob));
+        }
+
+        // Apply travel-only time reward nerf
+        $timeGlob = (float) (config('expeditions.travel_time_global_multiplier') ?? 1.0);
+        if ($timeGlob > 0.0 && $timeGlob !== 1.0) {
+            $baseTimeSec = max(1, (int) floor($baseTimeSec * $timeGlob));
+        }
 
         // Decide reward type: XP 58%, time 25%, item 15%, token 2%
         $roll = random_int(1, 100);

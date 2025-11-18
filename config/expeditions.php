@@ -1,5 +1,9 @@
 <?php
 return [
+    // Global XP multiplier (set to 0.25 to nerf to 25% of previous values)
+    'xp_global_multiplier' => 0.25,
+    // Travel-only time reward multiplier (set to 0.25 to nerf travel time rewards)
+    'travel_time_global_multiplier' => 0.25,
     'xp_per_level' => 6,
     'xp_per_hour' => 4,
     'xp_per_hour_base' => 8,

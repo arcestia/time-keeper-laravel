@@ -126,6 +126,12 @@ class ClaimAllExpeditionsJob implements ShouldQueue
                         $xpVarMax = max((float)$cfg['variance_max'], $xpVar);
                         $xp = (int) random_int((int) floor($xpRaw * $xpVar), (int) ceil($xpRaw * $xpVarMax));
                         $xpBaseForGuild = $xp;
+                        // Apply global nerf before bonuses
+                        $glob = (float) ($cfg['xp_global_multiplier'] ?? 1.0);
+                        if ($glob > 0.0 && $glob !== 1.0) {
+                            $xp = max(1, (int) floor($xp * $glob));
+                            $xpBaseForGuild = max(1, (int) floor($xpBaseForGuild * $glob));
+                        }
                         if ($xpMult > 1.0) { $xp = max(1, (int) floor($xp * $xpMult)); }
                         if ($mXpMult > 1.0) { $xp = max(1, (int) floor($xp * $mXpMult)); }
                         $sumXp += $xp; $state['claimed']++;
