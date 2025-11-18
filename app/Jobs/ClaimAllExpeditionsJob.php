@@ -78,7 +78,7 @@ class ClaimAllExpeditionsJob implements ShouldQueue
                     $rows = UserExpedition::with('expedition')->whereIn('id', $ids)->lockForUpdate()->get();
 
                     $cfg = config('expeditions');
-                    $sumXp = 0; $sumGuildXp = 0; $sumTime = 0; $sumFood = 0; $sumWater = 0;
+                    $sumXp = 0; $sumGuildXp = 0; $sumTime = 0; $sumFood = 0; $sumWater = 0; $sumMasteryXp = 0;
                     $lootMap = [];
 
                     $progress = app(ProgressService::class)->getOrCreate($this->userId);
@@ -118,6 +118,8 @@ class ClaimAllExpeditionsJob implements ShouldQueue
                         $consW = (float) ($cfg['consumable_weight'] ?? 0.0);
                         $mult = max(1.0, $levMult * (1.0 + $costSec * $costW + $energyPct * $energyW + $hours * $consW));
                         $xpRaw = (int) floor($xpRaw * $mult);
+                        // accumulate mastery XP on the difficulty-adjusted base before premium/mastery multipliers & variance
+                        $sumMasteryXp += (int) $xpRaw;
                         $xpVar = max((float)$cfg['variance_min'], 0.0);
                         $xpVarMax = max((float)$cfg['variance_max'], $xpVar);
                         $xp = (int) random_int((int) floor($xpRaw * $xpVar), (int) ceil($xpRaw * $xpVarMax));
@@ -167,7 +169,7 @@ class ClaimAllExpeditionsJob implements ShouldQueue
                     }
 
                     // Apply aggregate effects
-                    app(ExpeditionMasteryService::class)->addXp($this->userId, 0);
+                    app(ExpeditionMasteryService::class)->addXp($this->userId, (int)$sumMasteryXp);
                     app(ProgressService::class)->addXp($this->userId, (int)$sumXp);
                     $state['total_xp'] += (int)$sumXp; $state['total_guild_xp'] += (int)$sumGuildXp;
 
