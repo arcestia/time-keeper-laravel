@@ -47,7 +47,7 @@
                             <div id="level-meta" class="text-sm text-gray-700">Level 1 • Duration: - • Cost: - • Energy: -</div>
                             <div class="mt-3 flex items-center gap-3 flex-wrap">
                                 <label class="text-sm text-gray-600">Quantity</label>
-                                <input id="buy-qty" type="number" min="1" max="250" value="1" class="w-24 border rounded px-2 py-1 text-sm" />
+                                <input id="buy-qty" type="number" min="1" max="1000" value="1" class="w-24 border rounded px-2 py-1 text-sm" />
                                 <button id="buy-level" class="px-3 py-2 rounded bg-indigo-600 text-white">Buy Random Expedition</button>
                                 <div class="flex items-center gap-2 text-xs">
                                     <span class="text-gray-500">Quick:</span>
@@ -55,6 +55,8 @@
                                     <button class="btn-quick-buy px-2 py-1 rounded border hover:bg-gray-50" data-q="50">50</button>
                                     <button class="btn-quick-buy px-2 py-1 rounded border hover:bg-gray-50" data-q="100">100</button>
                                     <button class="btn-quick-buy px-2 py-1 rounded border hover:bg-gray-50" data-q="250">250</button>
+                                    <button class="btn-quick-buy px-2 py-1 rounded border hover:bg-gray-50" data-q="500">500</button>
+                                    <button class="btn-quick-buy px-2 py-1 rounded border hover:bg-gray-50" data-q="1000">1000</button>
                                 </div>
                             </div>
                         </div>
@@ -457,7 +459,7 @@
                 });
                 if (!isConfirmed) return;
                 try{
-                    const qty = Math.max(1, Math.min(250, parseInt(buyQty.value,10)||1));
+                    const qty = Math.max(1, Math.min(1000, parseInt(buyQty.value,10)||1));
                     const res = await fetch(`/api/expeditions/buy-level`, { method:'POST', headers:{'Accept':'application/json','Content-Type':'application/json','X-CSRF-TOKEN': csrf,'X-Requested-With':'XMLHttpRequest'}, body: JSON.stringify({ level: currentLevel, source: src, qty }) });
                     if (!res.ok) throw new Error();
                     await loadMy();
@@ -470,7 +472,7 @@
             // Quick buy buttons: set qty and reuse existing flow
             document.querySelectorAll('.btn-quick-buy').forEach(b => {
                 b.addEventListener('click', async () => {
-                    const n = Math.max(1, Math.min(250, parseInt(b.getAttribute('data-q'),10)||1));
+                    const n = Math.max(1, Math.min(1000, parseInt(b.getAttribute('data-q'),10)||1));
                     buyQty.value = String(n);
                     buyLevelBtn.click();
                 });
@@ -674,6 +676,11 @@
                         }
                         Swal.close();
                         await ensureSwal();
+                        // One final fetch to ensure we have the latest state (guards against race where we broke on 'done' before cache write flush)
+                        try{
+                            const st2 = await fetch('/api/expeditions/claim-all-status', { headers:{'Accept':'application/json'} });
+                            if (st2.ok){ const js2 = await st2.json().catch(()=>null); if(js2 && js2.ok){ last = js2; } }
+                        }catch(_){}
                         if (last.status==='blocked') {
                             await ensureSwal();
                             Swal.fire({icon:'warning', title:'Claim All paused', text: last.message || 'Food/Water is 0. Please replenish and try again.'});
@@ -697,7 +704,7 @@
                         const autoStr = Object.entries(last.auto_used||{}).map(([name,qty])=>`${name} x${fmtNum(qty)}`).join(', ');
                         const parts = [`+${fmtNum(last.total_xp||0)} XP`];
                         if ((last.total_guild_xp||0)>0) parts.push(`Guild +${fmtNum(last.total_guild_xp)} XP`);
-                        if (lootStr) parts.push(`Loot: ${lootStr}`);
+                        if (lootStr) parts.push(`Loot: ${lootStr}`); else parts.push('Loot: (none)');
                         if (autoStr) parts.push(`Auto-used: ${autoStr}`);
                         Swal.fire({ icon:'success', title:`Claimed ${fmtNum(last.claimed||0)} expeditions`, text: parts.join(' • ') });
                         await loadMy();

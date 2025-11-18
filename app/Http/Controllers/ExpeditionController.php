@@ -34,8 +34,19 @@ class ExpeditionController extends Controller
     {
         $user = Auth::user();
         $limit = max(50, min(1000, (int) request('limit', 300)));
-        // reset progress cache
-        Cache::forget('claim_all_progress:'.$user->id);
+        // reset and seed progress cache so UI immediately sees a running state
+        $cacheKey = 'claim_all_progress:'.$user->id;
+        Cache::forget($cacheKey);
+        Cache::put($cacheKey, [
+            'status' => 'running',
+            'claimed' => 0,
+            'total_xp' => 0,
+            'total_guild_xp' => 0,
+            'loot' => [],
+            'auto_used' => [],
+            'remaining' => 0,
+            'updated_at' => now()->toIso8601String(),
+        ], 3600);
         dispatch(new ClaimAllExpeditionsJob($user->id, $limit));
         return response()->json(['ok'=>true,'started'=>true,'limit'=>$limit]);
     }
@@ -419,7 +430,7 @@ class ExpeditionController extends Controller
         $now = now();
         $source = request()->input('source','wallet');
         if (!in_array($source,['wallet','bank'],true)) $source = 'wallet';
-        $qty = max(1, min(250, (int) request()->input('qty', 1)));
+        $qty = max(1, min(1000, (int) request()->input('qty', 1)));
 
         $result = DB::transaction(function() use($user,$exp,$source,$now,$level,$qty){
             $price = (int)$exp->cost_seconds * $qty;
