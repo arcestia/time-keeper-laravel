@@ -338,10 +338,33 @@ class ExpeditionController extends Controller
     public function catalog(): JsonResponse
     {
         $level = (int) request('level', 0);
+        // Ensure level 0 templates exist (3 tiers) when requested explicitly
+        if ($level === 0) {
+            // Return a representative sample of all levels including 0
+            // If level 0 entries do not exist, create them on the fly
+            if (!Expedition::where('level',0)->exists()) {
+                Expedition::create(['level'=>0,'name'=>'Free Expedition T1','description'=>'Free tier 1','min_duration_seconds'=>60,'max_duration_seconds'=>180,'cost_seconds'=>0,'energy_cost_pct'=>0]);
+                Expedition::create(['level'=>0,'name'=>'Free Expedition T2','description'=>'Free tier 2','min_duration_seconds'=>300,'max_duration_seconds'=>600,'cost_seconds'=>0,'energy_cost_pct'=>0]);
+                Expedition::create(['level'=>0,'name'=>'Free Expedition T3','description'=>'Free tier 3','min_duration_seconds'=>900,'max_duration_seconds'=>3600,'cost_seconds'=>0,'energy_cost_pct'=>0]);
+            }
+        }
         $q = Expedition::query();
-        if ($level >= 1 && $level <= 5) { $q->where('level', $level); }
+        if ($level >= 0 && $level <= 5) { $q->where('level', $level); }
         $list = $q->orderBy('level')->orderBy('id')->limit(200)->get();
         return response()->json($list);
+    }
+
+    public function level0Remaining(): JsonResponse
+    {
+        $user = Auth::user();
+        $today = now()->startOfDay();
+        $countToday = UserExpedition::where('user_id',$user->id)
+            ->whereDate('purchased_at','>=',$today)
+            ->whereHas('expedition', function($q){ $q->where('level',0); })
+            ->count();
+        $cap = 1000;
+        $remain = max(0, $cap - (int)$countToday);
+        return response()->json(['ok'=>true,'cap'=>$cap,'purchased_today'=>(int)$countToday,'remaining'=>$remain]);
     }
 
     public function my(): JsonResponse
@@ -448,7 +471,7 @@ class ExpeditionController extends Controller
     {
         $user = Auth::user();
         $level = (int) request()->input('level', 0);
-        if ($level < 1 || $level > 5) { abort(422, 'Invalid level'); }
+        if ($level < 0 || $level > 5) { abort(422, 'Invalid level'); }
         $exp = Expedition::where('level',$level)->inRandomOrder()->firstOrFail();
         $now = now();
         $source = request()->input('source','wallet');
@@ -456,15 +479,28 @@ class ExpeditionController extends Controller
         $qty = max(1, min(10000, (int) request()->input('qty', 1)));
 
         $result = DB::transaction(function() use($user,$exp,$source,$now,$level,$qty){
+            // Special handling for level 0: no cost, daily cap 1000 per user
+            if ($level === 0) {
+                // daily purchases for level 0 (by created date)
+                $today = now()->startOfDay();
+                $countToday = UserExpedition::where('user_id',$user->id)
+                    ->whereDate('purchased_at','>=',$today)
+                    ->whereHas('expedition', function($q){ $q->where('level',0); })
+                    ->count();
+                $cap = 1000;
+                $remain = max(0, $cap - (int)$countToday);
+                if ($remain <= 0) { abort(422, 'Daily free expeditions limit reached (1000).'); }
+                $qty = min($qty, $remain);
+            }
             $price = (int)$exp->cost_seconds * $qty;
             $wallet = null; $bank = null;
-            if ($source==='wallet'){
+            if ($price > 0 && $source==='wallet'){
                 $wallet = UserTimeWallet::where('user_id',$user->id)->lockForUpdate()->first();
                 if (!$wallet || (int)$wallet->available_seconds < $price){
                     Flasher::addError('Not enough wallet balance'); abort(422,'Not enough wallet balance');
                 }
                 $wallet->available_seconds = (int)$wallet->available_seconds - $price; $wallet->save();
-            } else {
+            } elseif ($price > 0) {
                 $bank = TimeAccount::where('user_id',$user->id)->lockForUpdate()->first();
                 if (!$bank || (int)$bank->base_balance_seconds < $price){
                     Flasher::addError('Not enough bank balance'); abort(422,'Not enough bank balance');
@@ -472,7 +508,14 @@ class ExpeditionController extends Controller
                 $bank->base_balance_seconds = (int)$bank->base_balance_seconds - $price; $bank->save();
             }
             // Preload all expeditions for the level once
-            $exps = Expedition::where('level',$level)->get(['id','min_duration_seconds','max_duration_seconds']);
+            $exps = Expedition::where('level',$level)->get(['id','min_duration_seconds','max_duration_seconds','cost_seconds','energy_cost_pct']);
+            if ($level === 0 && $exps->isEmpty()) {
+                // create templates if missing
+                Expedition::create(['level'=>0,'name'=>'Free Expedition T1','description'=>'Free tier 1','min_duration_seconds'=>60,'max_duration_seconds'=>180,'cost_seconds'=>0,'energy_cost_pct'=>0]);
+                Expedition::create(['level'=>0,'name'=>'Free Expedition T2','description'=>'Free tier 2','min_duration_seconds'=>300,'max_duration_seconds'=>600,'cost_seconds'=>0,'energy_cost_pct'=>0]);
+                Expedition::create(['level'=>0,'name'=>'Free Expedition T3','description'=>'Free tier 3','min_duration_seconds'=>900,'max_duration_seconds'=>3600,'cost_seconds'=>0,'energy_cost_pct'=>0]);
+                $exps = Expedition::where('level',0)->get(['id','min_duration_seconds','max_duration_seconds','cost_seconds','energy_cost_pct']);
+            }
             if ($exps->isEmpty()) { abort(422, 'No expeditions available for this level'); }
             $expArr = $exps->values()->all();
             $cntExps = count($expArr);

@@ -36,6 +36,7 @@
                     <div id="panel-catalog" class="mt-4">
                         <div class="flex items-center gap-2">
                             <span class="text-sm text-gray-600">Choose Level:</span>
+                            <button data-lvl="0" class="lvl-btn px-2 py-1 rounded border">0</button>
                             <button data-lvl="1" class="lvl-btn px-2 py-1 rounded border bg-indigo-50 text-indigo-700">1</button>
                             <button data-lvl="2" class="lvl-btn px-2 py-1 rounded border">2</button>
                             <button data-lvl="3" class="lvl-btn px-2 py-1 rounded border">3</button>
@@ -73,7 +74,8 @@
                         <div id="pending-level-filter" class="mt-2 hidden">
                             <div class="flex items-center gap-2 flex-wrap">
                                 <span class="text-xs text-gray-600">Level:</span>
-                                <button data-plvl="0" class="plvl-btn px-2 py-1 rounded border bg-indigo-50 text-indigo-700">All</button>
+                                <button data-plvl="-1" class="plvl-btn px-2 py-1 rounded border bg-indigo-50 text-indigo-700">All</button>
+                                <button data-plvl="0" class="plvl-btn px-2 py-1 rounded border">0</button>
                                 <button data-plvl="1" class="plvl-btn px-2 py-1 rounded border">1</button>
                                 <button data-plvl="2" class="plvl-btn px-2 py-1 rounded border">2</button>
                                 <button data-plvl="3" class="plvl-btn px-2 py-1 rounded border">3</button>
@@ -166,7 +168,8 @@
             const claimLimitInput = document.getElementById('claim-limit');
             const claimAutoChk = document.getElementById('claim-auto');
             let activeFinishedCount = 0;
-            let pendingLevel = 0;
+            // Use -1 to represent 'All' so level 0 can be filtered distinctly
+            let pendingLevel = -1;
             let activeFilter = 'all';
             let LEVEL_META = { cost_seconds: 0, energy_cost_pct: 0, min_duration_seconds: 0, max_duration_seconds: 0 };
             document.getElementById('xp-refresh').addEventListener('click', () => { loadCatalog(); loadMy(); loadXpBoost(); loadSlotStats(); refreshCounts(pendingLevel); });
@@ -233,11 +236,12 @@
                 b.addEventListener('click',()=>{
                     document.querySelectorAll('.plvl-btn').forEach(x=>x.classList.remove('bg-indigo-50','text-indigo-700'));
                     b.classList.add('bg-indigo-50','text-indigo-700');
-                    pendingLevel = parseInt(b.getAttribute('data-plvl'),10) || 0;
+                    const v = parseInt(b.getAttribute('data-plvl'),10);
+                    pendingLevel = isNaN(v) ? -1 : v;
                     const btn = document.getElementById('btn-start-all-level');
                     if (btn){
-                        if (pendingLevel===0){ btn.disabled = false; btn.textContent = 'Start All (All Levels)'; }
-                        else if (pendingLevel>=1 && pendingLevel<=5){ btn.disabled = false; btn.textContent = `Start All (Level ${pendingLevel})`; }
+                        if (pendingLevel===-1){ btn.disabled = false; btn.textContent = 'Start All (All Levels)'; }
+                        else if (pendingLevel>=0 && pendingLevel<=5){ btn.disabled = false; btn.textContent = `Start All (Level ${pendingLevel})`; }
                         else { btn.disabled = true; btn.textContent = 'Start All (—)'; }
                     }
                     loadPendingPaginated(true);
@@ -248,10 +252,11 @@
             const startAllBtn = document.getElementById('btn-start-all-level');
             if (startAllBtn){
                 startAllBtn.addEventListener('click', async ()=>{
-                    if (!(pendingLevel>=0 && pendingLevel<=5)) return;
+                    if (!(pendingLevel===-1 || (pendingLevel>=0 && pendingLevel<=5))) return;
                     startAllBtn.disabled = true; startAllBtn.textContent = 'Starting...';
                     try{
-                        const res = await fetch('/api/expeditions/start-all-by-level', { method:'POST', headers:{'Accept':'application/json','Content-Type':'application/json','X-CSRF-TOKEN': csrf,'X-Requested-With':'XMLHttpRequest'}, body: JSON.stringify({ level: pendingLevel }) });
+                        const lvlToSend = (pendingLevel===-1) ? 0 : pendingLevel;
+                        const res = await fetch('/api/expeditions/start-all-by-level', { method:'POST', headers:{'Accept':'application/json','Content-Type':'application/json','X-CSRF-TOKEN': csrf,'X-Requested-With':'XMLHttpRequest'}, body: JSON.stringify({ level: lvlToSend }) });
                         const js = await res.json().catch(()=>({}));
                         if (!res.ok) throw new Error(js && js.message ? js.message : 'Failed');
                         // reload lists
@@ -259,7 +264,7 @@
                     }catch(err){
                         try{ await ensureSwal(); Swal.fire({icon:'error', title: (err && err.message) ? err.message : 'Failed to start'}); }catch(e){}
                     }finally{
-                        startAllBtn.disabled = false; startAllBtn.textContent = (pendingLevel===0) ? 'Start All (All Levels)' : `Start All (Level ${pendingLevel||'—'})`;
+                        startAllBtn.disabled = false; startAllBtn.textContent = (pendingLevel===-1) ? 'Start All (All Levels)' : `Start All (Level ${pendingLevel||'—'})`;
                     }
                 });
             }
@@ -461,6 +466,13 @@
                     const qMax = estItemQty(currentLevel, e.max_duration_seconds);
                     const gXp = guildXpFromXpRange(xpBaseMinMax[0], xpBaseMaxMax[1]);
                     levelMeta.textContent = `Level ${currentLevel} • Duration: ${fmtHMS(e.min_duration_seconds)} - ${fmtHMS(e.max_duration_seconds)} • Cost: ${fmtHMS(e.cost_seconds)} • Energy: -${e.energy_cost_pct}% • Est. XP: ${fmtNum(xpMinMax[0])}–${fmtNum(xpMaxMax[1])} • Est. Time: ${tMinMax[0]}–${tMaxMax[1]} sec • Est. item qty per drop: ${qMin[0]}–${qMax[1]} • Est. guild XP (0.1% of base): ${fmtNum(gXp[0])}–${fmtNum(gXp[1])}`;
+                    // If Level 0, show remaining free purchases
+                    if (currentLevel===0){
+                        try{
+                            const rRem = await fetch('/api/expeditions/level0-remaining', { headers:{'Accept':'application/json'} });
+                            if (rRem.ok){ const rr = await rRem.json().catch(()=>null); if(rr && rr.ok){ catStatus.textContent = `Level 0 free: remaining today ${rr.remaining} / ${rr.cap}`; } }
+                        }catch(_){ /* ignore */ }
+                    }
                 }catch(e){ catStatus.textContent='Unable to load expeditions'; }
             }
 
@@ -556,7 +568,7 @@
                 try{
                     const params = new URLSearchParams();
                     params.set('status','pending');
-                    if (pendingLevel>=1 && pendingLevel<=5) params.set('level', String(pendingLevel));
+                    if (pendingLevel>=0 && pendingLevel<=5) params.set('level', String(pendingLevel));
                     params.set('page', String(pendingPage));
                     params.set('per_page','50');
                     const res = await fetch(`/api/expeditions/my?${params.toString()}`, { headers:{'Accept':'application/json'} });
@@ -565,7 +577,7 @@
                     const data = Array.isArray(json) ? json : (json.data || []);
                     for (const r of data){
                         const lvl = r.expedition?.level || 0;
-                        if (pendingLevel && lvl !== pendingLevel) { continue; }
+                        if ((pendingLevel>=0 && pendingLevel<=5) && lvl !== pendingLevel) { continue; }
                         const name = r.expedition?.name || '(unknown)';
                         const badges = buildBadges(lvl, r);
                         const title = document.createElement('div'); title.className='font-medium'; title.textContent=`${name}`;

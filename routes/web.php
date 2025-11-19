@@ -113,6 +113,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/api/expeditions/my', [ExpeditionController::class, 'my'])->name('expeditions.my');
     Route::get('/api/expeditions/my-counts', [ExpeditionController::class, 'myCounts'])->name('expeditions.my_counts');
     Route::get('/api/me/time-balances', [ExpeditionController::class, 'timeBalances'])->name('me.time_balances');
+    Route::get('/api/expeditions/level0-remaining', [ExpeditionController::class, 'level0Remaining'])->name('expeditions.level0_remaining');
     Route::post('/api/expeditions/buy/{id}', [ExpeditionController::class, 'buy'])->name('expeditions.buy');
     Route::post('/api/expeditions/buy-level', [ExpeditionController::class, 'buyLevel'])->name('expeditions.buylevel');
     Route::post('/api/expeditions/claim-all-start', [ExpeditionController::class, 'claimAllStart'])->name('expeditions.claim_all_start');

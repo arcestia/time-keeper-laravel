@@ -17,6 +17,7 @@ return [
     'variance_max' => 1.2,
     // Reward multipliers considering expedition level and costs
     'level_multipliers' => [
+        0 => 0.50,
         1 => 1.00,
         2 => 1.05,
         3 => 1.15,
@@ -33,6 +34,7 @@ return [
     'qty_per_hour' => 1,
     'qty_max' => 16,
     'level_qty_bands' => [
+        0 => [1,5],
         1 => [1, 2],
         2 => [2, 3],
         3 => [3, 5],
