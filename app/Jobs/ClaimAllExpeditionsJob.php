@@ -33,7 +33,7 @@ class ClaimAllExpeditionsJob implements ShouldQueue
     public function __construct(int $userId, int $limitPerBatch = 300)
     {
         $this->userId = $userId;
-        $this->limitPerBatch = max(50, min(1000, (int)$limitPerBatch));
+        $this->limitPerBatch = max(50, min(5000, (int)$limitPerBatch));
         $this->onQueue('default');
     }
 

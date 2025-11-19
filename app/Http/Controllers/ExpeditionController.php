@@ -30,10 +30,22 @@ class ExpeditionController extends Controller
         return view('expeditions.index');
     }
 
+    public function timeBalances(): JsonResponse
+    {
+        $user = Auth::user();
+        $wallet = UserTimeWallet::where('user_id',$user->id)->first();
+        $bank = TimeAccount::where('user_id',$user->id)->first();
+        return response()->json([
+            'ok' => true,
+            'wallet_seconds' => (int)($wallet->available_seconds ?? 0),
+            'bank_seconds' => (int)($bank->base_balance_seconds ?? 0),
+        ]);
+    }
+
     public function claimAllStart(): JsonResponse
     {
         $user = Auth::user();
-        $limit = max(50, min(1000, (int) request('limit', 300)));
+        $limit = max(50, min(5000, (int) request('limit', 300)));
         // reset and seed progress cache so UI immediately sees a running state
         $cacheKey = 'claim_all_progress:'.$user->id;
         Cache::forget($cacheKey);
@@ -104,39 +116,50 @@ class ExpeditionController extends Controller
                 return response()->json(['ok'=>true,'started'=>0,'message'=>'No free slots']);
             }
 
-            // select pending by requested level (0=any) up to remaining
-            $query = \App\Models\UserExpedition::query()
-                ->where(['user_id'=>$user->id,'status'=>'pending']);
-            if ($level > 0) {
-                $query->whereIn('expedition_id', function($q) use ($level){ $q->select('id')->from('expeditions')->where('level',$level); });
-            }
-            $toStart = $query->orderBy('id')->limit($remaining)->get();
-            // Energy gating: stop immediately if energy is 0 (unless Unlimited Energy)
+            // select pending by requested level (0=any) up to remaining, with expedition energy cost, and lock
+            $rows = \DB::table('user_expeditions as ue')
+                ->join('expeditions as e','e.id','=','ue.expedition_id')
+                ->where('ue.user_id',$user->id)
+                ->where('ue.status','pending')
+                ->when($level>0, function($q) use($level){ $q->where('e.level',$level); })
+                ->orderBy('ue.id')
+                ->limit($remaining)
+                ->lockForUpdate()
+                ->get(['ue.id','e.energy_cost_pct']);
+
+            // Energy gating
             $unlimited = \App\Services\PremiumService::unlimitedEnergyForUser($user->id);
             $statsPreview = \App\Models\UserStats::where('user_id',$user->id)->first();
             $energyRemaining = (int)($statsPreview->energy ?? 0);
             if (!$unlimited && $energyRemaining <= 0) {
                 return response()->json(['ok'=>true,'started'=>0,'message'=>'Energy is 0']);
             }
-            $started = 0; $sumEnergyCost = 0;
-            foreach ($toStart as $row) {
-                $ue = \App\Models\UserExpedition::where(['id'=>$row->id,'user_id'=>$user->id])->lockForUpdate()->first();
-                if (!$ue || $ue->status !== 'pending') { continue; }
-                // check per-expedition energy cost and stop if it would drop below 0 (unless Unlimited Energy)
-                $exp = \App\Models\Expedition::find($ue->expedition_id);
-                $costPct = (int)($exp->energy_cost_pct ?? 0);
+            $chosenIds = [];
+            $sumEnergyCost = 0;
+            foreach ($rows as $r) {
+                $cost = (int)($r->energy_cost_pct ?? 0);
                 if (!$unlimited) {
-                    if ($energyRemaining - $costPct < 0) { break; }
-                    $energyRemaining -= $costPct;
+                    if ($energyRemaining - $cost < 0) { break; }
+                    $energyRemaining -= $cost;
                 }
-                $ue->status = 'active';
-                $ue->started_at = $now;
-                $ue->ends_at = $now->copy()->addSeconds((int)$ue->duration_seconds);
-                $ue->save();
-                $started++;
-                // accumulate energy cost
-                if ($exp) { $sumEnergyCost += (int)$exp->energy_cost_pct; }
+                $sumEnergyCost += $cost;
+                $chosenIds[] = (int)$r->id;
             }
+            $started = count($chosenIds);
+            if ($started <= 0) {
+                return response()->json(['ok'=>true,'started'=>0,'message'=>'No eligible pending expeditions']);
+            }
+
+            // bulk update selected rows: set status/started_at/ends_at using duration_seconds
+            \DB::table('user_expeditions')
+                ->where('user_id',$user->id)
+                ->where('status','pending')
+                ->whereIn('id',$chosenIds)
+                ->update([
+                    'status' => 'active',
+                    'started_at' => $now,
+                    'ends_at' => \DB::raw("DATE_ADD('".$now->toDateTimeString()."', INTERVAL duration_seconds SECOND)"),
+                ]);
             // Deduct total energy like start()
             if ($started > 0) {
                 $stats = \App\Models\UserStats::where('user_id',$user->id)->lockForUpdate()->first();
@@ -430,7 +453,7 @@ class ExpeditionController extends Controller
         $now = now();
         $source = request()->input('source','wallet');
         if (!in_array($source,['wallet','bank'],true)) $source = 'wallet';
-        $qty = max(1, min(1000, (int) request()->input('qty', 1)));
+        $qty = max(1, min(10000, (int) request()->input('qty', 1)));
 
         $result = DB::transaction(function() use($user,$exp,$source,$now,$level,$qty){
             $price = (int)$exp->cost_seconds * $qty;
@@ -448,26 +471,42 @@ class ExpeditionController extends Controller
                 }
                 $bank->base_balance_seconds = (int)$bank->base_balance_seconds - $price; $bank->save();
             }
-            $created = [];
+            // Preload all expeditions for the level once
+            $exps = Expedition::where('level',$level)->get(['id','min_duration_seconds','max_duration_seconds']);
+            if ($exps->isEmpty()) { abort(422, 'No expeditions available for this level'); }
+            $expArr = $exps->values()->all();
+            $cntExps = count($expArr);
+            $rows = [];
+            $chunkSize = 1000; // bulk insert chunk to keep memory in check
+            $ts = now();
             for ($i=0; $i<$qty; $i++) {
-                $chosen = Expedition::where('level',$level)->inRandomOrder()->firstOrFail();
-                $dur = random_int((int)$chosen->min_duration_seconds, (int)$chosen->max_duration_seconds);
-                $baseXp = max(1, (int) floor($dur / 30));
-                $ue = UserExpedition::create([
+                $idx = random_int(0, max(0, $cntExps-1));
+                $ch = $expArr[$idx];
+                $minD = (int) ($ch->min_duration_seconds ?? 0);
+                $maxD = (int) ($ch->max_duration_seconds ?? $minD);
+                if ($maxD < $minD) { $maxD = $minD; }
+                $dur = random_int($minD, $maxD);
+                $rows[] = [
                     'user_id' => $user->id,
-                    'expedition_id' => $chosen->id,
+                    'expedition_id' => (int)$ch->id,
                     'status' => 'pending',
                     'purchased_at' => $now,
                     'duration_seconds' => $dur,
-                    'base_xp' => $baseXp,
-                ]);
-                $created[] = $ue;
+                    'base_xp' => max(1, (int) floor($dur / 30)),
+                    'created_at' => $ts,
+                    'updated_at' => $ts,
+                ];
+                if (count($rows) >= $chunkSize) {
+                    UserExpedition::insert($rows);
+                    $rows = [];
+                }
             }
-            return [$created,$wallet,$bank,$qty,$level];
+            if (!empty($rows)) { UserExpedition::insert($rows); }
+            return [$wallet,$bank,$qty,$level];
         });
-        [$created,$wallet,$bank,$qty,$level] = $result;
+        [$wallet,$bank,$qty,$level] = $result;
         Flasher::addSuccess('Purchased '.$qty.' expedition(s) at level '.$level);
-        return response()->json(['ok'=>true,'count'=>$qty,'expeditions'=>$created]);
+        return response()->json(['ok'=>true,'count'=>$qty]);
     }
 
     public function start(int $userExpeditionId): JsonResponse

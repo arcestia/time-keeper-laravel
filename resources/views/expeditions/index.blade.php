@@ -47,7 +47,7 @@
                             <div id="level-meta" class="text-sm text-gray-700">Level 1 • Duration: - • Cost: - • Energy: -</div>
                             <div class="mt-3 flex items-center gap-3 flex-wrap">
                                 <label class="text-sm text-gray-600">Quantity</label>
-                                <input id="buy-qty" type="number" min="1" max="1000" value="1" class="w-24 border rounded px-2 py-1 text-sm" />
+                                <input id="buy-qty" type="number" min="1" max="10000" value="1" class="w-24 border rounded px-2 py-1 text-sm" />
                                 <button id="buy-level" class="px-3 py-2 rounded bg-indigo-600 text-white">Buy Random Expedition</button>
                                 <div class="flex items-center gap-2 text-xs">
                                     <span class="text-gray-500">Quick:</span>
@@ -57,6 +57,8 @@
                                     <button class="btn-quick-buy px-2 py-1 rounded border hover:bg-gray-50" data-q="250">250</button>
                                     <button class="btn-quick-buy px-2 py-1 rounded border hover:bg-gray-50" data-q="500">500</button>
                                     <button class="btn-quick-buy px-2 py-1 rounded border hover:bg-gray-50" data-q="1000">1000</button>
+                                    <button class="btn-quick-buy px-2 py-1 rounded border hover:bg-gray-50" data-q="5000">5000</button>
+                                    <button class="btn-quick-buy px-2 py-1 rounded border hover:bg-gray-50" data-q="10000">10000</button>
                                 </div>
                             </div>
                         </div>
@@ -87,7 +89,17 @@
                                 <button data-aflt="progress" class="aflt-btn px-2 py-1 rounded border">On-Progress</button>
                                 <button data-aflt="finished" class="aflt-btn px-2 py-1 rounded border">Finished</button>
                             </div>
-                            <button id="btn-claim-all" class="px-3 py-1 rounded border text-gray-700 hover:bg-gray-50">Claim All</button>
+                            <div class="flex items-center gap-2">
+                                <label for="claim-limit" class="text-xs text-gray-500">Limit</label>
+                                <input id="claim-limit" type="number" min="50" max="5000" value="300" class="w-20 border rounded px-2 py-1 text-xs" />
+                                <label class="flex items-center gap-1 text-xs text-gray-600 select-none"><input id="claim-auto" type="checkbox" class="rounded" /> Auto</label>
+                                <div class="hidden sm:flex items-center gap-1">
+                                    <button class="btn-claim-quick px-2 py-1 rounded border text-xs" data-q="300">300</button>
+                                    <button class="btn-claim-quick px-2 py-1 rounded border text-xs" data-q="1000">1000</button>
+                                    <button class="btn-claim-quick px-2 py-1 rounded border text-xs" data-q="5000">5000</button>
+                                </div>
+                                <button id="btn-claim-all" class="px-3 py-1 rounded border text-gray-700 hover:bg-gray-50">Claim All</button>
+                            </div>
                         </div>
                         <div id="my-status" class="mt-2 text-sm text-gray-500"></div>
                         <div class="mt-3">
@@ -151,8 +163,12 @@
             const pendingMoreWrap = document.getElementById('pending-more-wrap');
             const xpBoostBadge = document.getElementById('exp-xp-boost');
             const pendingMoreBtn = document.getElementById('btn-pending-more');
+            const claimLimitInput = document.getElementById('claim-limit');
+            const claimAutoChk = document.getElementById('claim-auto');
+            let activeFinishedCount = 0;
             let pendingLevel = 0;
             let activeFilter = 'all';
+            let LEVEL_META = { cost_seconds: 0, energy_cost_pct: 0, min_duration_seconds: 0, max_duration_seconds: 0 };
             document.getElementById('xp-refresh').addEventListener('click', () => { loadCatalog(); loadMy(); loadXpBoost(); loadSlotStats(); refreshCounts(pendingLevel); });
 
             async function loadXpBoost(){
@@ -434,6 +450,7 @@
                     const e = Array.isArray(data) && data[0] ? data[0] : null;
                     if (!e){ catStatus.textContent='No expeditions found'; levelMeta.textContent = `Level ${currentLevel} • Duration: - • Cost: - • Energy: -`; return; }
                     catStatus.textContent='';
+                    LEVEL_META = { cost_seconds: Number(e.cost_seconds||0), energy_cost_pct: Number(e.energy_cost_pct||0), min_duration_seconds: Number(e.min_duration_seconds||0), max_duration_seconds: Number(e.max_duration_seconds||0) };
                     const xpMinMax = estXp(currentLevel, e.min_duration_seconds, e.cost_seconds, e.energy_cost_pct);
                     const xpMaxMax = estXp(currentLevel, e.max_duration_seconds, e.cost_seconds, e.energy_cost_pct);
                     const xpBaseMinMax = estXpBase(currentLevel, e.min_duration_seconds, e.cost_seconds, e.energy_cost_pct);
@@ -449,17 +466,41 @@
 
             buyLevelBtn.addEventListener('click', async ()=>{
                 await ensureSwal();
-                const { isConfirmed, value: src } = await Swal.fire({
-                    title:`Buy Random Expedition (Level ${currentLevel})`,
-                    input:'select',
-                    inputOptions:{ wallet:'Wallet', bank:'Bank' },
-                    inputValue:'wallet',
-                    showCancelButton:true,
-                    confirmButtonText:'Buy'
-                });
-                if (!isConfirmed) return;
                 try{
-                    const qty = Math.max(1, Math.min(1000, parseInt(buyQty.value,10)||1));
+                    // Gather qty and balances
+                    const qty = Math.max(1, Math.min(10000, parseInt(buyQty.value,10)||1));
+                    const balRes = await fetch('/api/me/time-balances', { headers:{'Accept':'application/json'} });
+                    const bal = balRes.ok ? await balRes.json().catch(()=>({})) : {};
+                    const wallet = Number(bal.wallet_seconds||0);
+                    const bank = Number(bal.bank_seconds||0);
+                    const unitCost = Number(LEVEL_META.cost_seconds||0);
+                    const totalCost = unitCost * qty;
+                    const combined = wallet + bank;
+                    const risky = combined>0 && totalCost > (combined*0.5);
+                    const warnHtml = risky ? `<div class="text-rose-600 font-medium">Warning: This purchase exceeds 50% of your total balance.</div><br/>` : '';
+                    const html = warnHtml + `Quantity: <b>${qty.toLocaleString()}</b><br/>`+
+                                 `Unit Cost: <b>${fmtHMS(unitCost)}</b><br/>`+
+                                 `Total Cost: <b>${fmtHMS(totalCost)}</b><br/><br/>`+
+                                 `Wallet: <b>${fmtHMS(wallet)}</b><br/>Bank: <b>${fmtHMS(bank)}</b>`;
+                    const LS_KEY_SRC = 'exp_buy_source';
+                    const lastSrc = (localStorage.getItem(LS_KEY_SRC) === 'bank') ? 'bank' : 'wallet';
+                    const { isConfirmed, value: src } = await Swal.fire({
+                        title:`Confirm Purchase (Level ${currentLevel})`,
+                        html,
+                        input:'select',
+                        inputOptions:{ wallet:`Wallet (${fmtHMS(wallet)})`, bank:`Bank (${fmtHMS(bank)})` },
+                        inputValue:lastSrc,
+                        showCancelButton:true,
+                        confirmButtonText: risky ? 'Buy Anyway' : 'Buy'
+                    });
+                    if (!isConfirmed) return;
+                    // simple insufficiency check before posting
+                    const balSrc = src==='bank' ? bank : wallet;
+                    if (balSrc < totalCost){
+                        await Swal.fire({icon:'error', title:'Insufficient balance', text:`Selected source has ${fmtHMS(balSrc)} but requires ${fmtHMS(totalCost)}.`});
+                        return;
+                    }
+                    try{ localStorage.setItem(LS_KEY_SRC, src); }catch(e){}
                     const res = await fetch(`/api/expeditions/buy-level`, { method:'POST', headers:{'Accept':'application/json','Content-Type':'application/json','X-CSRF-TOKEN': csrf,'X-Requested-With':'XMLHttpRequest'}, body: JSON.stringify({ level: currentLevel, source: src, qty }) });
                     if (!res.ok) throw new Error();
                     await loadMy();
@@ -472,7 +513,7 @@
             // Quick buy buttons: set qty and reuse existing flow
             document.querySelectorAll('.btn-quick-buy').forEach(b => {
                 b.addEventListener('click', async () => {
-                    const n = Math.max(1, Math.min(1000, parseInt(b.getAttribute('data-q'),10)||1));
+                    const n = Math.max(1, Math.min(10000, parseInt(b.getAttribute('data-q'),10)||1));
                     buyQty.value = String(n);
                     buyLevelBtn.click();
                 });
@@ -601,6 +642,7 @@
                         cA++;
                     }
                     tActive.textContent = `Active (${cA})`;
+                    activeFinishedCount = finishedCount;
                     const claimAllBtn = document.getElementById('btn-claim-all');
                     if (claimAllBtn) claimAllBtn.disabled = finishedCount<=0;
                 }catch(e){ /* ignore */ }
@@ -658,7 +700,15 @@
                 claimAllBtn.addEventListener('click', async ()=>{
                     try{
                         claimAllBtn.disabled = true;
-                        const startRes = await fetch('/api/expeditions/claim-all-start?limit=300', { method:'POST', headers:{'Accept':'application/json','X-CSRF-TOKEN': csrf,'X-Requested-With':'XMLHttpRequest' } });
+                        // determine limit (auto-detect uses current finished count)
+                        let lim = 300;
+                        if (claimAutoChk && claimAutoChk.checked) {
+                            lim = Math.max(50, Math.min(5000, parseInt(activeFinishedCount,10)||0));
+                            if (lim < 50) lim = 50; // ensure minimum for backend
+                        } else if (claimLimitInput) {
+                            lim = Math.max(50, Math.min(5000, parseInt(claimLimitInput.value,10)||300));
+                        }
+                        const startRes = await fetch(`/api/expeditions/claim-all-start?limit=${encodeURIComponent(lim)}`, { method:'POST', headers:{'Accept':'application/json','X-CSRF-TOKEN': csrf,'X-Requested-With':'XMLHttpRequest' } });
                         if (!startRes.ok) { const e = await startRes.json().catch(()=>({})); const msg = e && e.message ? e.message : 'Failed to start claim-all'; throw new Error(msg); }
                         await ensureSwal();
                         Swal.fire({
@@ -711,6 +761,21 @@
                     }catch(err){ await ensureSwal(); Swal.fire({icon:'error', title: (err && err.message) ? err.message : 'Failed to claim all'}); }
                     finally { claimAllBtn.disabled = false; }
                 });
+            }
+
+            // Claim-all quick buttons: set input and uncheck auto
+            document.querySelectorAll('.btn-claim-quick').forEach(b => {
+                b.addEventListener('click', () => {
+                    if (claimAutoChk) claimAutoChk.checked = false;
+                    if (claimLimitInput) claimLimitInput.value = String(Math.max(50, Math.min(5000, parseInt(b.getAttribute('data-q'),10)||300)));
+                });
+            });
+
+            // Disable/enable limit input when auto is toggled
+            if (claimAutoChk && claimLimitInput) {
+                const syncDisabled = () => { claimLimitInput.disabled = !!claimAutoChk.checked; };
+                claimAutoChk.addEventListener('change', syncDisabled);
+                syncDisabled();
             }
 
             // Pending-level filters behavior
