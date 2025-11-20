@@ -349,10 +349,15 @@ class ExpeditionController extends Controller
             }
         }
         // Compute a lightweight ETag based on latest update time per level
-        $lastUpdated = Expedition::when($level >= 0 && $level <= 5, function($q) use($level){ $q->where('level',$level); })->max('updated_at');
-        $etag = 'W/"exp-cat-'.($level).'--'.(optional($lastUpdated)->timestamp ?? 0).'"';
+        $lastUpdatedRaw = Expedition::when($level >= 0 && $level <= 5, function($q) use($level){ $q->where('level',$level); })
+            ->max('updated_at');
+        $lastUpdated = null;
+        if ($lastUpdatedRaw) {
+            try { $lastUpdated = $lastUpdatedRaw instanceof \Carbon\CarbonInterface ? $lastUpdatedRaw : Carbon::parse($lastUpdatedRaw); } catch (\Throwable $__) { $lastUpdated = null; }
+        }
+        $etag = 'W/"exp-cat-'.($level).'--'.($lastUpdated ? $lastUpdated->getTimestamp() : 0).'"';
         if (request()->headers->get('If-None-Match') === $etag) {
-            return response()->noContent(304)->withHeaders(['ETag' => $etag, 'Last-Modified' => optional($lastUpdated)->toRfc7231String()]);
+            return response()->noContent(304)->withHeaders(['ETag' => $etag, 'Last-Modified' => $lastUpdated ? $lastUpdated->toRfc7231String() : null]);
         }
         $cacheKey = 'exp_catalog:'.max(-1,$level);
         $list = Cache::remember($cacheKey, 60, function() use($level){
@@ -362,7 +367,7 @@ class ExpeditionController extends Controller
         });
         return response()->json($list)->withHeaders([
             'ETag' => $etag,
-            'Last-Modified' => optional($lastUpdated)->toRfc7231String(),
+            'Last-Modified' => $lastUpdated ? $lastUpdated->toRfc7231String() : null,
             'Cache-Control' => 'public, max-age=60'
         ]);
     }
