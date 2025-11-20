@@ -348,13 +348,23 @@ class ExpeditionController extends Controller
                 Expedition::create(['level'=>0,'name'=>'Free Expedition T3','description'=>'Free tier 3','min_duration_seconds'=>900,'max_duration_seconds'=>3600,'cost_seconds'=>0,'energy_cost_pct'=>0]);
             }
         }
+        // Compute a lightweight ETag based on latest update time per level
+        $lastUpdated = Expedition::when($level >= 0 && $level <= 5, function($q) use($level){ $q->where('level',$level); })->max('updated_at');
+        $etag = 'W/"exp-cat-'.($level).'--'.(optional($lastUpdated)->timestamp ?? 0).'"';
+        if (request()->headers->get('If-None-Match') === $etag) {
+            return response()->noContent(304)->withHeaders(['ETag' => $etag, 'Last-Modified' => optional($lastUpdated)->toRfc7231String()]);
+        }
         $cacheKey = 'exp_catalog:'.max(-1,$level);
         $list = Cache::remember($cacheKey, 60, function() use($level){
             $q = Expedition::query();
             if ($level >= 0 && $level <= 5) { $q->where('level', $level); }
             return $q->orderBy('level')->orderBy('id')->limit(200)->get(['id','level','name','description','min_duration_seconds','max_duration_seconds','cost_seconds','energy_cost_pct']);
         });
-        return response()->json($list);
+        return response()->json($list)->withHeaders([
+            'ETag' => $etag,
+            'Last-Modified' => optional($lastUpdated)->toRfc7231String(),
+            'Cache-Control' => 'public, max-age=60'
+        ]);
     }
 
     public function level0Remaining(): JsonResponse
@@ -407,13 +417,16 @@ class ExpeditionController extends Controller
     {
         $userId = Auth::id();
         $level = (int) request('level', 0);
-        $q = UserExpedition::query()
-            ->select('status', \DB::raw('COUNT(*) as c'))
-            ->where('user_id', $userId);
-        if ($level >= 1 && $level <= 5) {
-            $q->whereHas('expedition', function($qq) use($level){ $qq->where('level', $level); });
-        }
-        $rows = $q->groupBy('status')->get();
+        $cacheKey = 'my_counts:'.$userId.':'.$level;
+        $rows = Cache::remember($cacheKey, 5, function() use($userId,$level){
+            $q = UserExpedition::query()
+                ->select('status', \DB::raw('COUNT(*) as c'))
+                ->where('user_id', $userId);
+            if ($level >= 1 && $level <= 5) {
+                $q->whereHas('expedition', function($qq) use($level){ $qq->where('level', $level); });
+            }
+            return $q->groupBy('status')->get();
+        });
         $map = [
             'pending' => 0,
             'active' => 0,
