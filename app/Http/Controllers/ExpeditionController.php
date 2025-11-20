@@ -414,7 +414,13 @@ class ExpeditionController extends Controller
             $q->whereHas('expedition', function($qq) use($level){ $qq->where('level', $level); });
         }
         $per = max(1, min(100, $per ?: 50));
-        $res = $q->orderByDesc('id')->paginate($per);
+        // Most progressed first for active: order by ends_at ASC (closest to finishing).
+        if ($status === 'active') {
+            $q->orderBy('ends_at', 'asc')->orderBy('id', 'asc');
+        } else {
+            $q->orderByDesc('id');
+        }
+        $res = $q->paginate($per);
         return response()->json($res);
     }
 
