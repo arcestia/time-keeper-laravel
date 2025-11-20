@@ -348,9 +348,12 @@ class ExpeditionController extends Controller
                 Expedition::create(['level'=>0,'name'=>'Free Expedition T3','description'=>'Free tier 3','min_duration_seconds'=>900,'max_duration_seconds'=>3600,'cost_seconds'=>0,'energy_cost_pct'=>0]);
             }
         }
-        $q = Expedition::query();
-        if ($level >= 0 && $level <= 5) { $q->where('level', $level); }
-        $list = $q->orderBy('level')->orderBy('id')->limit(200)->get();
+        $cacheKey = 'exp_catalog:'.max(-1,$level);
+        $list = Cache::remember($cacheKey, 60, function() use($level){
+            $q = Expedition::query();
+            if ($level >= 0 && $level <= 5) { $q->where('level', $level); }
+            return $q->orderBy('level')->orderBy('id')->limit(200)->get(['id','level','name','description','min_duration_seconds','max_duration_seconds','cost_seconds','energy_cost_pct']);
+        });
         return response()->json($list);
     }
 
@@ -386,7 +389,9 @@ class ExpeditionController extends Controller
         }
 
         // Paginated + filtered
-        $q = UserExpedition::with('expedition')->where('user_id',$userId);
+        $q = UserExpedition::with(['expedition' => function($qq){
+                $qq->select('id','level','name','cost_seconds','energy_cost_pct');
+            }])->where('user_id',$userId);
         if (is_string($status) && $status !== '') {
             $q->where('status', $status);
         }
@@ -649,6 +654,15 @@ class ExpeditionController extends Controller
                 $xp = max(1, (int) floor($xp * $glob));
                 $xpBaseForGuild = max(1, (int) floor($xpBaseForGuild * $glob));
             }
+            // Apply per-level XP caps (cap applies to both base and final xp)
+            try {
+                $capMap = (array) (config('expeditions.xp_cap_per_level') ?? []);
+                $capVal = (int) ($capMap[$level] ?? 0);
+                if ($capVal > 0) {
+                    $xp = min($xp, $capVal);
+                    $xpBaseForGuild = min($xpBaseForGuild, $capVal);
+                }
+            } catch (\Throwable $__) {}
             $prem = PremiumService::getOrCreate($user->id);
             if (PremiumService::isActive($prem)) {
                 $tier = PremiumService::tierFor((int)$prem->premium_seconds_accumulated);

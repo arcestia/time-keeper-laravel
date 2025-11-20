@@ -132,6 +132,15 @@ class ClaimAllExpeditionsJob implements ShouldQueue
                             $xp = max(1, (int) floor($xp * $glob));
                             $xpBaseForGuild = max(1, (int) floor($xpBaseForGuild * $glob));
                         }
+                        // Apply per-level XP caps (cap applies to both base and final xp)
+                        try {
+                            $capMap = (array) (config('expeditions.xp_cap_per_level') ?? []);
+                            $capVal = (int) ($capMap[$level] ?? 0);
+                            if ($capVal > 0) {
+                                $xp = min($xp, $capVal);
+                                $xpBaseForGuild = min($xpBaseForGuild, $capVal);
+                            }
+                        } catch (\Throwable $__) {}
                         if ($xpMult > 1.0) { $xp = max(1, (int) floor($xp * $xpMult)); }
                         if ($mXpMult > 1.0) { $xp = max(1, (int) floor($xp * $mXpMult)); }
                         $sumXp += $xp; $state['claimed']++;

@@ -33,6 +33,14 @@ return [
     'time_profit_margin_cap' => 0.50, // cap at +50%
     'qty_per_hour' => 1,
     'qty_max' => 16,
+    'xp_cap_per_level' => [
+        0 => 500000,   // cap base/claimed XP per expedition at this level
+        1 => 1000000,
+        2 => 2000000,
+        3 => 4000000,
+        4 => 8000000,
+        5 => 16000000,
+    ],
     'level_qty_bands' => [
         0 => [1,5],
         1 => [1, 2],
