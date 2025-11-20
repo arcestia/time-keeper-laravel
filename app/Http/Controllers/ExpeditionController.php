@@ -357,7 +357,9 @@ class ExpeditionController extends Controller
         }
         $etag = 'W/"exp-cat-'.($level).'--'.($lastUpdated ? $lastUpdated->getTimestamp() : 0).'"';
         if (request()->headers->get('If-None-Match') === $etag) {
-            return response()->noContent(304)->withHeaders(['ETag' => $etag, 'Last-Modified' => $lastUpdated ? $lastUpdated->toRfc7231String() : null]);
+            $headers = ['ETag' => $etag];
+            if ($lastUpdated) { $headers['Last-Modified'] = $lastUpdated->toRfc7231String(); }
+            return response()->json(null, 304, $headers);
         }
         $cacheKey = 'exp_catalog:'.max(-1,$level);
         $list = Cache::remember($cacheKey, 60, function() use($level){
@@ -365,11 +367,9 @@ class ExpeditionController extends Controller
             if ($level >= 0 && $level <= 5) { $q->where('level', $level); }
             return $q->orderBy('level')->orderBy('id')->limit(200)->get(['id','level','name','description','min_duration_seconds','max_duration_seconds','cost_seconds','energy_cost_pct']);
         });
-        return response()->json($list)->withHeaders([
-            'ETag' => $etag,
-            'Last-Modified' => $lastUpdated ? $lastUpdated->toRfc7231String() : null,
-            'Cache-Control' => 'public, max-age=60'
-        ]);
+        $headers = [ 'ETag' => $etag, 'Cache-Control' => 'public, max-age=60' ];
+        if ($lastUpdated) { $headers['Last-Modified'] = $lastUpdated->toRfc7231String(); }
+        return response()->json($list, 200, $headers);
     }
 
     public function level0Remaining(): JsonResponse
